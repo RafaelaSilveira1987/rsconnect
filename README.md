@@ -1,3 +1,15 @@
+# RS Connect 36.44.1
+> **36.44.1** move a escolha do segmento para a própria empresa e torna essa decisão obrigatória no primeiro passo do onboarding. O segmento seleciona/aplica o blueprint inicial que prepara perguntas, permissões, políticas e fluxo do assistente. O cadastro feito pelo RS Admin não define mais segmento/modelo. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+
+## Homologação rápida 36.44.1
+1. Cadastre uma nova empresa pelo RS Admin e confirme que não existe campo de segmento/modelo nesse formulário.
+2. Entre com o administrador do cliente e abra **Primeiros passos → Cadastro da empresa**.
+3. Confirme que razão social e CNPJ/CPF estão protegidos e que **Segmento da empresa** é obrigatório.
+4. Selecione um segmento e valide que o **Modelo inicial recomendado** é filtrado/selecionado automaticamente.
+5. Tente salvar sem e-mail e sem telefone: o backend deve impedir o avanço.
+6. Salve com contato válido e confirme que a etapa fica concluída e o blueprint foi aplicado ao tenant.
+7. Reabra e salve sem trocar o modelo: personalizações existentes não devem ser recriadas/reaplicadas.
+
 # RS Connect 36.44.0
 > **36.44.0** inicia a Ativação Assistida com uma etapa obrigatória de **Limites e Condutas do Assistente**. Desconto, reembolso, exceções, faixa etária, casos personalizados e situações sensíveis passam a ser decisões estruturadas do Policy Engine antes da IA. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
 

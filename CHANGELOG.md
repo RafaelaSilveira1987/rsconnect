@@ -1,3 +1,24 @@
+## 36.44.1 — Cadastro orientado por segmento
+
+### Alterado
+- o cadastro inicial do tenant no painel RS deixa de definir segmento e blueprint; essas escolhas passam a pertencer à própria empresa no primeiro acesso;
+- a primeira etapa do onboarding foi redesenhada em blocos de **dados oficiais**, **identificação operacional/segmento** e **contato**;
+- segmento passa a ser obrigatório para avançar e o backend também exige pelo menos e-mail comercial ou telefone;
+- o segmento selecionado filtra os modelos de atendimento disponíveis e o primeiro blueprint ativo é sugerido automaticamente;
+- ao salvar, o RS Connect grava o nicho estruturado, normaliza o nome do segmento e aplica o blueprint correspondente para preparar perguntas, permissões, políticas e workflow;
+- um blueprint já aplicado não é reaplicado em um salvamento simples, evitando sobrescrever personalizações existentes;
+- progresso manual antigo não consegue mais marcar **Cadastro da empresa** como concluído se nicho/modelo estruturado estiverem ausentes.
+
+### UX
+- o bloco somente leitura agora contém apenas razão social e CNPJ/CPF;
+- a empresa visualiza qual modelo inicial será preparado e o que ele entrega antes de salvar;
+- o botão principal passa a ser **Salvar e preparar atendimento**.
+
+### Compatibilidade
+- nenhuma migration nova;
+- permanece obrigatória `125_native_financial_lifecycle_notifications.sql`;
+- os blueprints já existentes por segmento continuam sendo a fonte de configuração inicial.
+
 ## 36.44.0 — Ativação Assistida: Limites e Condutas
 
 ### Adicionado

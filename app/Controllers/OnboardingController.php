@@ -13,6 +13,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AiAutomationService;
+use App\Services\AgentBlueprintService;
 use App\Services\OnboardingGuideService;
 use App\Services\PromptStudioService;
 use PDO;
@@ -69,7 +70,10 @@ final class OnboardingController
     {
         $tenantId = (int) Auth::tenantId();
         $pdo = Database::connection();
-        $currentStatement = $pdo->prepare('SELECT name, legal_name, document, email, phone, website, segment FROM tenants WHERE id = :id LIMIT 1');
+        $currentStatement = $pdo->prepare(
+            'SELECT name, legal_name, document, email, phone, website, segment, business_niche_id, agent_blueprint_id
+             FROM tenants WHERE id = :id LIMIT 1'
+        );
         $currentStatement->execute(['id' => $tenantId]);
         $current = $currentStatement->fetch(PDO::FETCH_ASSOC);
 
@@ -82,43 +86,110 @@ final class OnboardingController
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? ($current['email'] ?? ''))));
         $phone = trim((string) ($_POST['phone'] ?? ($current['phone'] ?? '')));
         $website = trim((string) ($_POST['website'] ?? ($current['website'] ?? '')));
-        $segment = trim((string) ($current['segment'] ?? ''));
+        $businessNicheId = max(0, (int) ($_POST['business_niche_id'] ?? 0));
+        $blueprintId = max(0, (int) ($_POST['agent_blueprint_id'] ?? 0));
 
         if ($name === '' || ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))) {
             Flash::set('error', 'Informe o nome da empresa e um e-mail válido.');
             $this->redirect('/onboarding');
         }
-
+        if ($email === '' && $phone === '') {
+            Flash::set('error', 'Informe pelo menos um contato da empresa: e-mail comercial ou telefone.');
+            $this->redirect('/onboarding');
+        }
         if ($website !== '' && !filter_var($website, FILTER_VALIDATE_URL)) {
             Flash::set('error', 'Informe o site completo, incluindo https://.');
             $this->redirect('/onboarding');
         }
-
-        if ($segment === '') {
-            Flash::set('warning', 'O segmento ainda não foi definido no cadastro da empresa. Fale com a equipe RS para concluir este dado cadastral.');
+        if ($businessNicheId < 1) {
+            Flash::set('warning', 'Escolha o segmento da empresa. O segmento é obrigatório para preparar as regras iniciais do assistente.');
             $this->redirect('/onboarding');
         }
 
-        // O cliente completa apenas dados operacionais. Razão social, documento e
-        // segmento permanecem exatamente como foram cadastrados pela equipe RS.
-        $statement = $pdo->prepare(
-            'UPDATE tenants
-             SET name = :name, email = :email, phone = :phone, website = :website,
-                 onboarding_step = GREATEST(onboarding_step, 2)
-             WHERE id = :id'
-        );
-        $statement->execute([
-            'name' => $name,
-            'email' => $email !== '' ? $email : null,
-            'phone' => $phone !== '' ? $phone : null,
-            'website' => $website !== '' ? $website : null,
-            'id' => $tenantId,
-        ]);
+        $blueprintService = new AgentBlueprintService();
+        $niche = null;
+        foreach ($blueprintService->niches() as $candidate) {
+            if ((int) ($candidate['id'] ?? 0) === $businessNicheId) {
+                $niche = $candidate;
+                break;
+            }
+        }
+        if (!$niche) {
+            Flash::set('error', 'O segmento selecionado não está disponível. Escolha outro segmento.');
+            $this->redirect('/onboarding');
+        }
+
+        $availableBlueprints = $blueprintService->blueprints($businessNicheId);
+        if ($blueprintId > 0) {
+            $selectedBlueprint = null;
+            foreach ($availableBlueprints as $candidate) {
+                if ((int) ($candidate['id'] ?? 0) === $blueprintId) {
+                    $selectedBlueprint = $candidate;
+                    break;
+                }
+            }
+            if (!$selectedBlueprint) {
+                Flash::set('error', 'O modelo de atendimento escolhido não pertence ao segmento selecionado.');
+                $this->redirect('/onboarding');
+            }
+        } else {
+            $blueprintId = (int) ($availableBlueprints[0]['id'] ?? 0);
+        }
+
+        if ($blueprintId < 1) {
+            Flash::set('error', 'Este segmento ainda não possui um modelo de atendimento ativo. Selecione outro segmento ou fale com a equipe RS.');
+            $this->redirect('/onboarding');
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            $statement = $pdo->prepare(
+                'UPDATE tenants
+                 SET name = :name, email = :email, phone = :phone, website = :website,
+                     segment = :segment, business_niche_id = :business_niche_id,
+                     onboarding_step = GREATEST(onboarding_step, 2)
+                 WHERE id = :id'
+            );
+            $statement->execute([
+                'name' => $name,
+                'email' => $email !== '' ? $email : null,
+                'phone' => $phone !== '' ? $phone : null,
+                'website' => $website !== '' ? $website : null,
+                'segment' => (string) ($niche['name'] ?? ''),
+                'business_niche_id' => $businessNicheId,
+                'id' => $tenantId,
+            ]);
+
+            $profile = $blueprintService->profileForTenant($tenantId, false, $pdo);
+            $currentBlueprintId = (int) (($current['agent_blueprint_id'] ?? 0) ?: ($profile['blueprint_id'] ?? 0));
+            if ($currentBlueprintId !== $blueprintId || empty($profile['id'])) {
+                $blueprintService->applyBlueprint($tenantId, $blueprintId, $pdo, false);
+            }
+
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            Flash::set('error', 'Não foi possível preparar a configuração inicial da empresa: ' . $exception->getMessage());
+            $this->redirect('/onboarding');
+        }
 
         Auth::refreshUser();
-        Audit::log('onboarding.company_completed', ['segment' => $segment], $tenantId);
-        (new OnboardingGuideService())->saveStep($tenantId, 'company_profile', 'complete', 'Dados operacionais da empresa revisados; dados mestres preservados.', Auth::id());
-        Flash::set('success', 'Dados da empresa salvos. Continue para a próxima etapa.');
+        Audit::log('onboarding.company_completed', [
+            'business_niche_id' => $businessNicheId,
+            'agent_blueprint_id' => $blueprintId,
+            'segment' => (string) ($niche['name'] ?? ''),
+        ], $tenantId);
+        (new OnboardingGuideService())->saveStep(
+            $tenantId,
+            'company_profile',
+            'complete',
+            'Empresa identificada, segmento definido e modelo inicial de atendimento preparado.',
+            Auth::id()
+        );
+        Flash::set('success', 'Cadastro salvo e configuração inicial do segmento preparada. Continue para a próxima etapa.');
         $this->redirect('/onboarding');
     }
 

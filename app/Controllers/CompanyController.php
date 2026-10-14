@@ -71,9 +71,6 @@ final class CompanyController
         $document = trim((string) ($_POST['document'] ?? ''));
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $phone = trim((string) ($_POST['phone'] ?? ''));
-        $segment = trim((string) ($_POST['segment'] ?? ''));
-        $businessNicheId = max(0, (int) ($_POST['business_niche_id'] ?? 0));
-        $agentBlueprintId = max(0, (int) ($_POST['agent_blueprint_id'] ?? 0));
         $plan = (string) ($_POST['plan'] ?? 'starter');
         $ownerName = trim((string) ($_POST['owner_name'] ?? ''));
         $ownerEmail = mb_strtolower(trim((string) ($_POST['owner_email'] ?? '')));
@@ -94,28 +91,6 @@ final class CompanyController
         }
 
         $pdo = Database::connection();
-        $blueprintService = new AgentBlueprintService();
-        if ($agentBlueprintId > 0) {
-            $selectedBlueprint = $blueprintService->blueprint($agentBlueprintId, $pdo);
-            if (!$selectedBlueprint || ($businessNicheId > 0 && (int) ($selectedBlueprint['niche_id'] ?? 0) !== $businessNicheId)) {
-                Flash::set('error', 'O blueprint selecionado não pertence ao nicho informado.');
-                $this->redirect('/companies');
-            }
-            $businessNicheId = (int) ($selectedBlueprint['niche_id'] ?? $businessNicheId);
-            if ($segment === '') {
-                $segment = (string) ($selectedBlueprint['niche_name'] ?? '');
-            }
-        } elseif ($businessNicheId > 0) {
-            foreach ($blueprintService->blueprints($businessNicheId) as $candidateBlueprint) {
-                $agentBlueprintId = (int) ($candidateBlueprint['id'] ?? 0);
-                if ($agentBlueprintId > 0) {
-                    if ($segment === '') {
-                        $segment = (string) ($candidateBlueprint['niche_name'] ?? '');
-                    }
-                    break;
-                }
-            }
-        }
 
         try {
             $pdo->beginTransaction();
@@ -123,9 +98,9 @@ final class CompanyController
 
             $tenant = $pdo->prepare(
                 'INSERT INTO tenants
-                    (name, legal_name, slug, document, email, phone, segment, business_niche_id, plan, status, lifecycle_status, onboarding_step)
+                    (name, legal_name, slug, document, email, phone, segment, business_niche_id, agent_blueprint_id, plan, status, lifecycle_status, onboarding_step)
                  VALUES
-                    (:name, :legal_name, :slug, :document, :email, :phone, :segment, :business_niche_id, :plan, "active", "onboarding", 1)'
+                    (:name, :legal_name, :slug, :document, :email, :phone, NULL, NULL, NULL, :plan, "active", "onboarding", 1)'
             );
             $tenant->execute([
                 'name' => $name,
@@ -134,8 +109,6 @@ final class CompanyController
                 'document' => $document !== '' ? $document : null,
                 'email' => $email !== '' ? $email : null,
                 'phone' => $phone !== '' ? $phone : null,
-                'segment' => $segment !== '' ? $segment : null,
-                'business_niche_id' => $businessNicheId > 0 ? $businessNicheId : null,
                 'plan' => $plan,
             ]);
             $tenantId = (int) $pdo->lastInsertId();
@@ -153,13 +126,10 @@ final class CompanyController
 
             $this->createInitialSubscription($pdo, $tenantId, $plan);
             $this->createDefaultPipeline($pdo, $tenantId);
-            if ($agentBlueprintId > 0) {
-                $blueprintService->applyBlueprint($tenantId, $agentBlueprintId, $pdo, false);
-            }
 
             $pdo->commit();
             Audit::log('company.created', ['company_name' => $name, 'owner_email' => $ownerEmail], $tenantId);
-            Flash::set('success', 'Empresa e administrador do cliente cadastrados.');
+            Flash::set('success', 'Empresa e administrador cadastrados. O cliente definirá o segmento obrigatório no primeiro acesso.');
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

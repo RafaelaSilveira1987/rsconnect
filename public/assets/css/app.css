@@ -17454,3 +17454,68 @@ summary {
   .agenda-main-tab strong { font-size: .84rem; }
   .agenda-main-tab small { font-size: .69rem; }
 }
+
+/* RS Connect 36.44.1 — cadastro da empresa orientado por segmento */
+.onboarding-company-setup {
+  display: grid;
+  gap: 18px;
+}
+.onboarding-company-section {
+  padding: 18px;
+  border: 1px solid #dce8ef;
+  border-radius: 18px;
+  background: #fbfdfe;
+}
+.onboarding-company-section .section-heading { margin-bottom: 14px; }
+.onboarding-company-section .section-heading h3 { margin: 3px 0 0; color: #223249; font-size: 1rem; }
+.onboarding-company-section .section-heading p { margin: 5px 0 0; color: #6d7d91; font-size: .8rem; line-height: 1.5; }
+.onboarding-blueprint-field select option[hidden] { display: none; }
+.onboarding-segment-preview {
+  min-height: 100%;
+  padding: 14px 16px;
+  border: 1px solid #d7e8e5;
+  border-radius: 15px;
+  background: linear-gradient(180deg, #f5fbfa 0%, #eef8f6 100%);
+}
+.onboarding-segment-preview > span {
+  display: block;
+  color: #6b8191;
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.onboarding-segment-preview > strong {
+  display: block;
+  margin-top: 5px;
+  color: #1f5264;
+  font-size: .95rem;
+}
+.onboarding-segment-preview > p {
+  margin: 7px 0 0;
+  color: #64778a;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+.onboarding-segment-prepares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+.onboarding-segment-prepares em {
+  padding: 5px 8px;
+  border: 1px solid #d6e8e5;
+  border-radius: 999px;
+  background: #fff;
+  color: #52717b;
+  font-size: .67rem;
+  font-style: normal;
+  font-weight: 800;
+}
+.onboarding-company-model-note { margin-top: 0; }
+.onboarding-company-setup .master-data-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .onboarding-company-section { padding: 14px; }
+  .onboarding-company-setup .master-data-summary { grid-template-columns: 1fr; }
+}

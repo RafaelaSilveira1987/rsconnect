@@ -15,6 +15,10 @@ $attendanceSettings = $guide['attendance_settings'] ?? [];
 $slaSettings = $guide['sla_settings'] ?? ['target_minutes' => 30, 'warning_percent' => 80, 'count_outside_business_hours' => 0];
 $preSchedule = $guide['pre_schedule'] ?? [];
 $agentLimits = $guide['agent_limits'] ?? [];
+$businessNiches = $guide['business_niches'] ?? [];
+$agentBlueprints = $guide['agent_blueprints'] ?? [];
+$agentBlueprintProfile = $guide['agent_blueprint_profile'] ?? [];
+$selectedCompanyBlueprintId = (int) (($company['agent_blueprint_id'] ?? 0) ?: ($agentBlueprintProfile['blueprint_id'] ?? 0));
 $calendarAccess = $guide['calendar_access'] ?? [];
 $calendarAvailability = $guide['calendar_availability'] ?? [];
 $events = $guide['events'] ?? [];
@@ -133,27 +137,57 @@ $statusClass = static fn (string $status): string => match ($status) {
                 <?php if (!$stepAccessible): ?>
                     <div class="onboarding-locked-message"><strong>Etapa ainda bloqueada</strong><span>Conclua a etapa anterior para liberar esta configuração.</span></div>
                 <?php elseif ($step['key'] === 'company_profile'): ?>
-                    <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/company')) ?>">
+                    <form class="wizard-card onboarding-inline-form onboarding-company-setup" method="post" action="<?= View::e(Router::url('/onboarding/company')) ?>" data-company-onboarding>
                         <?= Csrf::input() ?>
-                        <div class="onboarding-company-prefill-note"><strong>Sua empresa já foi preparada pela equipe RS.</strong><span>Confira os dados oficiais e complete apenas as informações de contato que faltarem.</span></div>
+                        <div class="onboarding-company-prefill-note"><strong>A equipe RS preparou os dados oficiais.</strong><span>Agora a própria empresa define o segmento e os dados operacionais. Sem segmento não é possível avançar para as próximas etapas.</span></div>
+
                         <div class="master-data-panel is-compact">
                             <div class="master-data-panel-head">
-                                <div><span class="eyebrow">Cadastro RS</span><strong>Dados oficiais da empresa</strong></div>
+                                <div><span class="eyebrow">Cadastro RS</span><strong>Dados oficiais da empresa</strong><small>Razão social e documento permanecem protegidos para evitar alteração acidental.</small></div>
                                 <span class="master-data-status">Somente leitura</span>
                             </div>
                             <div class="master-data-summary">
                                 <div class="master-data-item"><span>Razão social</span><strong><?= View::e($company['legal_name'] ?? 'Não informado') ?></strong></div>
                                 <div class="master-data-item"><span>CNPJ/CPF</span><strong><?= View::e($company['document'] ?? 'Não informado') ?></strong></div>
-                                <div class="master-data-item"><span>Segmento</span><strong><?= View::e($company['segment'] ?? 'Não informado') ?></strong></div>
                             </div>
                         </div>
-                        <div class="form-grid two onboarding-company-editable-fields">
-                            <label class="field"><span>Nome de exibição</span><input name="name" value="<?= View::e($company['name'] ?? '') ?>" required></label>
-                            <label class="field"><span>E-mail comercial</span><input type="email" name="email" value="<?= View::e($company['email'] ?? '') ?>"></label>
-                            <label class="field"><span>Telefone</span><input name="phone" value="<?= View::e($company['phone'] ?? '') ?>"></label>
-                            <label class="field"><span>Site</span><input type="url" name="website" value="<?= View::e($company['website'] ?? '') ?>" placeholder="https://empresa.com.br"></label>
-                        </div>
-                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar empresa</button></div>
+
+                        <section class="onboarding-company-section">
+                            <div class="section-heading compact"><div><span class="eyebrow">1. Identificação operacional</span><h3>Como sua empresa será configurada</h3><p>O segmento define a base inicial de perguntas, permissões, regras e fluxo do assistente. Depois tudo poderá ser ajustado nas etapas seguintes.</p></div><span class="badge badge-warning">Obrigatório</span></div>
+                            <div class="form-grid two onboarding-company-editable-fields">
+                                <label class="field"><span>Nome de exibição</span><input name="name" value="<?= View::e($company['name'] ?? '') ?>" required><small class="field-hint">Nome usado nas telas e comunicações do RS Connect.</small></label>
+                                <label class="field"><span>Segmento da empresa</span><select name="business_niche_id" required data-onboarding-niche>
+                                    <option value="">Selecione o segmento</option>
+                                    <?php foreach ($businessNiches as $niche): ?>
+                                        <option value="<?= (int) ($niche['id'] ?? 0) ?>" data-description="<?= View::e((string) ($niche['description'] ?? '')) ?>" <?= (int) ($company['business_niche_id'] ?? 0) === (int) ($niche['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) ($niche['name'] ?? '')) ?></option>
+                                    <?php endforeach; ?>
+                                </select><small class="field-hint">Escolha a atividade que melhor representa a operação principal da empresa.</small></label>
+                                <label class="field onboarding-blueprint-field"><span>Modelo inicial recomendado</span><select name="agent_blueprint_id" required data-onboarding-blueprint>
+                                    <option value="">Selecione primeiro o segmento</option>
+                                    <?php foreach ($agentBlueprints as $blueprint): ?>
+                                        <option value="<?= (int) ($blueprint['id'] ?? 0) ?>" data-niche-id="<?= (int) ($blueprint['niche_id'] ?? 0) ?>" data-description="<?= View::e((string) ($blueprint['description'] ?? '')) ?>" <?= $selectedCompanyBlueprintId === (int) ($blueprint['id'] ?? 0) ? 'selected' : '' ?>><?= View::e((string) ($blueprint['name'] ?? '')) ?></option>
+                                    <?php endforeach; ?>
+                                </select><small class="field-hint">O RS Connect seleciona automaticamente o primeiro modelo disponível do segmento. Troque somente quando houver mais de uma opção.</small></label>
+                                <div class="onboarding-segment-preview" data-onboarding-segment-preview>
+                                    <span>O que será preparado</span>
+                                    <strong data-onboarding-blueprint-name>Escolha um segmento</strong>
+                                    <p data-onboarding-blueprint-description>Ao selecionar o segmento, mostraremos o modelo de atendimento que será aplicado como ponto de partida.</p>
+                                    <div class="onboarding-segment-prepares"><em>Perguntas iniciais</em><em>Regras de segurança</em><em>Permissões</em><em>Fluxo de atendimento</em></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="onboarding-company-section">
+                            <div class="section-heading compact"><div><span class="eyebrow">2. Contato</span><h3>Como identificar e contatar a empresa</h3><p>Informe pelo menos e-mail comercial ou telefone. O site é opcional.</p></div></div>
+                            <div class="form-grid two onboarding-company-editable-fields">
+                                <label class="field"><span>E-mail comercial</span><input type="email" name="email" value="<?= View::e($company['email'] ?? '') ?>" placeholder="contato@empresa.com.br"></label>
+                                <label class="field"><span>Telefone</span><input name="phone" value="<?= View::e($company['phone'] ?? '') ?>" placeholder="(00) 00000-0000"></label>
+                                <label class="field"><span>Site</span><input type="url" name="website" value="<?= View::e($company['website'] ?? '') ?>" placeholder="https://empresa.com.br"></label>
+                            </div>
+                        </section>
+
+                        <div class="message-info onboarding-company-model-note"><strong>O que acontece ao salvar?</strong><span>O RS Connect vincula o segmento, aplica o modelo inicial correspondente e prepara a estrutura que será revisada nas etapas de atendimento, agenda, assistente e limites. Nada é ativado para clientes finais antes do teste final.</span></div>
+                        <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar e preparar atendimento</button></div>
                     </form>
                 <?php elseif ($step['key'] === 'whatsapp_connection'): ?>
                     <div class="onboarding-action-grid">
@@ -388,6 +422,53 @@ $statusClass = static fn (string $status): string => match ($status) {
 
             </section>
         <?php endforeach; ?>
+
+        <script>
+        (function () {
+            const root = document.querySelector('[data-company-onboarding]');
+            if (!root) return;
+            const niche = root.querySelector('[data-onboarding-niche]');
+            const blueprint = root.querySelector('[data-onboarding-blueprint]');
+            const previewName = root.querySelector('[data-onboarding-blueprint-name]');
+            const previewDescription = root.querySelector('[data-onboarding-blueprint-description]');
+            if (!niche || !blueprint) return;
+
+            const syncPreview = () => {
+                const selected = blueprint.selectedOptions[0];
+                if (previewName) previewName.textContent = selected && selected.value ? selected.textContent.trim() : 'Nenhum modelo disponível';
+                if (previewDescription) {
+                    const text = selected && selected.value ? (selected.dataset.description || '') : '';
+                    previewDescription.textContent = text || 'O segmento escolhido ainda precisa de um modelo de atendimento ativo.';
+                }
+            };
+
+            const syncBlueprints = (autoChoose) => {
+                const nicheId = niche.value;
+                let firstVisible = '';
+                let currentVisible = false;
+                [...blueprint.options].forEach((option, index) => {
+                    if (index === 0) return;
+                    const visible = !!nicheId && option.dataset.nicheId === nicheId;
+                    option.hidden = !visible;
+                    option.disabled = !visible;
+                    if (visible && !firstVisible) firstVisible = option.value;
+                    if (visible && option.selected) currentVisible = true;
+                });
+                if (!nicheId) {
+                    blueprint.value = '';
+                } else if ((autoChoose || !currentVisible) && firstVisible) {
+                    blueprint.value = firstVisible;
+                } else if (!firstVisible) {
+                    blueprint.value = '';
+                }
+                syncPreview();
+            };
+
+            niche.addEventListener('change', () => syncBlueprints(true));
+            blueprint.addEventListener('change', syncPreview);
+            syncBlueprints(false);
+        })();
+        </script>
 
         <section class="card onboarding-history-card">
             <div class="section-heading"><div><span class="eyebrow">Histórico</span><h2>Atividades do onboarding</h2></div></div>

@@ -64,10 +64,10 @@ $check(
 
 $check(
     str_contains($version, 'RS Connect 36.42.5 — Monitoramento coerente sem n8n')
-        && str_contains($version, 'RS Connect 36.43.0') && str_contains($version, 'RS Connect 36.43.1') && str_contains($version, 'RS Connect 36.44.0')
-        && ($manifest['package_version'] ?? '') === '36.44.0'
+        && str_contains($version, 'RS Connect 36.43.0') && str_contains($version, 'RS Connect 36.43.1') && str_contains($version, 'RS Connect 36.44.0') && str_contains($version, 'RS Connect 36.44.1')
+        && ($manifest['package_version'] ?? '') === '36.44.1'
         && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql',
-    'release 36.42.5 preservada e 36.43.1 registrada com migration 125'
+    'release 36.42.5 preservada e versão atual registrada com migration 125'
 );
 
 exit($failed > 0 ? 1 : 0);

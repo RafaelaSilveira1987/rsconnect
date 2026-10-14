@@ -16,19 +16,7 @@ use App\Core\View;
             <label class="field"><span>Plano inicial</span><select name="plan"><option value="starter">Inicial</option><option value="pro">Profissional</option><option value="business">Empresarial</option><option value="custom">Personalizado</option></select></label>
             <label class="field drawer-span"><span>E-mail comercial</span><input type="email" name="email" placeholder="contato@empresa.com"></label>
             <label class="field"><span>Telefone</span><input name="phone" placeholder="(11) 99999-9999"></label>
-            <label class="field"><span>Segmento da empresa</span><select name="business_niche_id" data-company-niche>
-                <option value="">Escolher depois</option>
-                <?php foreach (($businessNiches ?? []) as $niche): ?>
-                    <option value="<?= (int) ($niche['id'] ?? 0) ?>"><?= View::e((string) ($niche['name'] ?? '')) ?></option>
-                <?php endforeach; ?>
-            </select><small class="field-hint">O segmento sugere um modelo de atendimento com perguntas, regras de segurança e permissões adequadas ao tipo de negócio.</small></label>
-            <label class="field"><span>Modelo de atendimento</span><select name="agent_blueprint_id" data-company-blueprint>
-                <option value="">Usar o modelo recomendado para o segmento</option>
-                <?php foreach (($agentBlueprints ?? []) as $blueprint): ?>
-                    <option value="<?= (int) ($blueprint['id'] ?? 0) ?>" data-niche-id="<?= (int) ($blueprint['niche_id'] ?? 0) ?>"><?= View::e((string) (($blueprint['niche_name'] ?? '') . ' — ' . ($blueprint['name'] ?? ''))) ?></option>
-                <?php endforeach; ?>
-            </select></label>
-            <label class="field drawer-span"><span>Detalhes do segmento</span><input name="segment" placeholder="Opcional. Ex.: Psicologia infantil, barbearia premium..."><small class="field-hint">Opcional. Use apenas se quiser detalhar melhor a atividade da empresa.</small></label>
+            <div class="drawer-span message-info"><strong>Segmento definido pelo cliente</strong><span>O segmento e o modelo inicial de atendimento não são mais escolhidos pela equipe RS neste cadastro. No primeiro acesso, a própria empresa seleciona o segmento obrigatório e o RS Connect prepara as configurações correspondentes.</span></div>
         </div>
     </section>
 
@@ -46,25 +34,3 @@ use App\Core\View;
         <button class="btn btn-primary" type="submit">Criar empresa e acesso</button>
     </div>
 </form>
-
-<script>
-(function () {
-    const niche = document.querySelector('[data-company-niche]');
-    const blueprint = document.querySelector('[data-company-blueprint]');
-    if (!niche || !blueprint) return;
-    const sync = () => {
-        const nicheId = niche.value;
-        let firstVisible = '';
-        [...blueprint.options].forEach((option, index) => {
-            if (index === 0) return;
-            const visible = !nicheId || option.dataset.nicheId === nicheId;
-            option.hidden = !visible;
-            if (visible && !firstVisible) firstVisible = option.value;
-        });
-        const selected = blueprint.selectedOptions[0];
-        if (selected && selected.value && selected.hidden) blueprint.value = '';
-    };
-    niche.addEventListener('change', sync);
-    sync();
-})();
-</script>

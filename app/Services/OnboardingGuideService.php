@@ -38,9 +38,18 @@ final class OnboardingGuideService
             $manualStatus = (string) ($manualRow['status'] ?? 'auto');
 
             if ($manualRow && $manualStatus !== 'auto') {
-                $status = $manualStatus;
-                if ($notes !== '') {
-                    $message = $notes;
+                // Etapas cadastrais críticas não podem ser marcadas como concluídas apenas
+                // por um registro manual antigo quando a validação estrutural atual falha.
+                // Isso evita que tenants sem segmento/modelo atravessem o onboarding.
+                $strictAuto = in_array((string) $definition['key'], ['company_profile'], true);
+                $manualCanOverride = !$strictAuto
+                    || in_array($auto['status'], ['complete', 'skipped'], true)
+                    || !in_array($manualStatus, ['complete', 'skipped'], true);
+                if ($manualCanOverride) {
+                    $status = $manualStatus;
+                    if ($notes !== '') {
+                        $message = $notes;
+                    }
                 }
             }
 
@@ -104,6 +113,9 @@ final class OnboardingGuideService
             'calendar_availability' => (new CalendarAvailabilityService())->settings($tenantId),
             'pre_schedule' => $this->preScheduleSettings($tenantId),
             'agent_limits' => $this->agentLimitsSettings($tenantId),
+            'business_niches' => (new AgentBlueprintService())->niches(),
+            'agent_blueprints' => (new AgentBlueprintService())->blueprints(),
+            'agent_blueprint_profile' => (new AgentBlueprintService())->profileForTenant($tenantId, false),
             'privacy' => $this->privacyStatus($tenantId, $userId),
             'events' => $this->events($tenantId),
             'quick_links' => $this->quickLinks(),
@@ -836,19 +848,23 @@ final class OnboardingGuideService
     {
         $tenant = $this->tenant($tenantId);
         $missing = [];
-        foreach (['name' => 'nome', 'segment' => 'segmento'] as $field => $label) {
-            if (trim((string) ($tenant[$field] ?? '')) === '') {
-                $missing[] = $label;
-            }
+        if (trim((string) ($tenant['name'] ?? '')) === '') {
+            $missing[] = 'nome';
+        }
+        if ((int) ($tenant['business_niche_id'] ?? 0) < 1) {
+            $missing[] = 'segmento';
+        }
+        if ((int) ($tenant['agent_blueprint_id'] ?? 0) < 1) {
+            $missing[] = 'modelo inicial do segmento';
         }
         if (trim((string) ($tenant['email'] ?? '')) === '' && trim((string) ($tenant['phone'] ?? '')) === '') {
             $missing[] = 'e-mail ou telefone';
         }
         if (!$missing) {
             if ((int) ($tenant['onboarding_step'] ?? 1) <= 1) {
-                return ['status' => 'pending', 'message' => 'Confira os dados preparados pela RS e clique em Salvar empresa para confirmar o cadastro.'];
+                return ['status' => 'pending', 'message' => 'Confira os dados oficiais, escolha o segmento e salve para preparar o atendimento.'];
             }
-            return ['status' => 'complete', 'message' => 'Dados principais revisados e confirmados.'];
+            return ['status' => 'complete', 'message' => 'Cadastro confirmado, segmento definido e modelo inicial preparado.'];
         }
         return ['status' => 'pending', 'message' => 'Falta preencher: ' . implode(', ', $missing) . '.'];
     }

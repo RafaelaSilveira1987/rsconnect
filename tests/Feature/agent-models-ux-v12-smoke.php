@@ -6,6 +6,7 @@ $root = dirname(__DIR__, 2);
 $admin = (string) file_get_contents($root . '/app/Views/agent_blueprints/index.php');
 $settings = (string) file_get_contents($root . '/app/Views/companies/settings.php');
 $create = (string) file_get_contents($root . '/app/Views/companies/_create_form.php');
+$onboarding = (string) file_get_contents($root . '/app/Views/onboarding/index.php');
 $layout = (string) file_get_contents($root . '/app/Views/layouts/app.php');
 $css = (string) file_get_contents($root . '/public/assets/css/app.css');
 $version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
@@ -19,7 +20,7 @@ $checks = [
     'políticas usam linguagem comum' => str_contains($settings, 'Regras que o assistente deve respeitar') && str_contains($settings, 'O que fazer quando a regra for acionada'),
     'workflow é passo a passo' => str_contains($settings, 'Passo a passo que o assistente segue'),
     'histórico traduz decisões' => str_contains($settings, "'allow' => 'Permitido'") && str_contains($settings, "'block' => 'Bloqueado'"),
-    'cadastro usa segmento e modelo' => str_contains($create, 'Segmento da empresa') && str_contains($create, 'Modelo de atendimento'),
+    'cadastro usa segmento e modelo' => str_contains($create, 'Segmento definido pelo cliente') && str_contains($onboarding, 'Segmento da empresa') && str_contains($onboarding, 'Modelo inicial recomendado'),
     'estilo novo carregado' => str_contains($css, '.agent-models-hero') && str_contains($css, '.agent-rules-panel') && str_contains($css, '.agent-workflow-flow'),
     'pacote atualizado' => str_contains($version, 'RS Connect 36.28.2'),
 ];

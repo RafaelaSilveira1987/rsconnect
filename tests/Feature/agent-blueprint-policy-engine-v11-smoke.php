@@ -105,6 +105,8 @@ $pre = (string) file_get_contents($root . '/app/Services/PreSchedulingService.ph
 $calendar = (string) file_get_contents($root . '/app/Services/CalendarConversationService.php');
 $settings = (string) file_get_contents($root . '/app/Views/companies/settings.php');
 $createForm = (string) file_get_contents($root . '/app/Views/companies/_create_form.php');
+$onboardingView = (string) file_get_contents($root . '/app/Views/onboarding/index.php');
+$onboardingController = (string) file_get_contents($root . '/app/Controllers/OnboardingController.php');
 $migration = (string) file_get_contents($root . '/database/migrations/103_agent_blueprints_policy_engine.sql');
 $blueprintAdmin = (string) file_get_contents($root . '/app/Views/agent_blueprints/index.php');
 $blueprintController = (string) file_get_contents($root . '/app/Controllers/AgentBlueprintController.php');
@@ -121,7 +123,11 @@ $checks['RS Admin possui editor de blueprint e políticas'] = str_contains($sett
     && str_contains($settings, 'agent_policies[')
     && str_contains($settings, 'triage_fields[')
     && str_contains($settings, 'O que o assistente decidiu recentemente');
-$checks['cadastro de empresa seleciona nicho e blueprint'] = str_contains($createForm, 'business_niche_id') && str_contains($createForm, 'agent_blueprint_id');
+$checks['segmento e blueprint são definidos pela própria empresa no onboarding'] = !str_contains($createForm, 'name="business_niche_id"')
+    && !str_contains($createForm, 'name="agent_blueprint_id"')
+    && str_contains($onboardingView, 'name="business_niche_id"')
+    && str_contains($onboardingView, 'name="agent_blueprint_id"')
+    && str_contains($onboardingController, 'Escolha o segmento da empresa');
 $checks['migration cria estrutura versionada e auditoria'] = str_contains($migration, 'agent_blueprint_versions')
     && str_contains($migration, 'conversation_policy_decisions')
     && str_contains($migration, 'conversation_triage_sessions');
