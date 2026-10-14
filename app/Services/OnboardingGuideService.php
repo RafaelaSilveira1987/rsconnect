@@ -144,6 +144,7 @@ final class OnboardingGuideService
         $step = $this->currentStepKey($tenantId, $userId);
         return match ($step) {
             'lgpd_acceptance' => in_array($path, ['/privacy/accept'], true),
+            'attendance_rules', 'agenda_setup', 'agent_limits' => str_starts_with($path, '/agents') || str_starts_with($path, '/calendar'),
             'whatsapp_connection' => str_starts_with($path, '/instances'),
             'ai_agent' => str_starts_with($path, '/agents') || str_starts_with($path, '/prompt-studio'),
             'final_test' => str_starts_with($path, '/conversations') || str_starts_with($path, '/calendar'),
@@ -192,6 +193,173 @@ final class OnboardingGuideService
 
         $this->syncImplementation($tenantId, $stepKey, $status, $notes, $userId);
         $this->refreshTenantProgress($tenantId);
+    }
+
+    /**
+     * Salva a configuração essencial do atendimento em uma única transação.
+     * A tela fala a linguagem do negócio; este método traduz as respostas para
+     * triagem, workflow, capabilities, agenda e políticas estruturadas.
+     *
+     * @param array<string,mixed> $data
+     */
+    public function saveBusinessOperation(int $tenantId, array $data, ?int $userId): void
+    {
+        if ($tenantId < 1) {
+            throw new \RuntimeException('Empresa inválida.');
+        }
+
+        $agendaEnabled = (string) ($data['calendar_enabled'] ?? '0') === '1';
+        $approvalMode = strtolower(trim((string) ($data['approval_mode'] ?? 'human')));
+        $humanApproval = $approvalMode !== 'automatic';
+        $capacity = max(1, min(100, (int) ($data['slot_capacity'] ?? 1)));
+        $selectedFields = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $value): string => mb_substr(trim((string) $value), 0, 100),
+            is_array($data['triage_fields'] ?? null) ? $data['triage_fields'] : []
+        ))));
+
+        if ($agendaEnabled && $selectedFields === []) {
+            throw new \RuntimeException('Selecione pelo menos uma informação que o assistente deve coletar antes de agendar.');
+        }
+
+        $days = is_array($data['days'] ?? null) ? $data['days'] : [];
+        $dayMap = ['sun' => 0, 'mon' => 1, 'tue' => 2, 'wed' => 3, 'thu' => 4, 'fri' => 5, 'sat' => 6];
+        $internalDays = [];
+        foreach ($days as $dayCode) {
+            $dayCode = strtolower(trim((string) $dayCode));
+            if (array_key_exists($dayCode, $dayMap)) {
+                $internalDays[] = $dayMap[$dayCode];
+            }
+        }
+        $internalDays = array_values(array_unique($internalDays));
+
+        $currentAccess = $this->calendarAccessSettings($tenantId);
+        $calendarMode = 'none';
+        if ($agendaEnabled) {
+            $calendarMode = ($currentAccess['calendar_mode'] ?? 'none') === 'smart'
+                && ($currentAccess['smart_calendar_status'] ?? 'locked') === 'ready'
+                ? 'smart'
+                : 'internal';
+        }
+
+        $currentCalendar = (new CalendarAvailabilityService())->settings($tenantId);
+        $currentPreSchedule = $this->preScheduleSettings($tenantId);
+        $currentLimits = $this->agentLimitsSettings($tenantId);
+
+        $start = trim((string) ($data['start_time'] ?? '08:00')) ?: '08:00';
+        $end = trim((string) ($data['end_time'] ?? '18:00')) ?: '18:00';
+        $internalStart = [];
+        $internalEnd = [];
+        foreach ($internalDays as $dayNumber) {
+            $internalStart[$dayNumber] = $start;
+            $internalEnd[$dayNumber] = $end;
+        }
+
+        $discountPolicy = strtolower(trim((string) ($data['discount_policy'] ?? 'off')));
+        $refundPolicy = strtolower(trim((string) ($data['refund_policy'] ?? 'off')));
+        $exceptionPolicy = strtolower(trim((string) ($data['exception_policy'] ?? 'off')));
+        $ageRestricted = (string) ($data['age_restricted'] ?? '0') === '1';
+        $customTerms = trim((string) ($data['custom_case_terms'] ?? ''));
+
+        $limitsPayload = [
+            'discount_rule_enabled' => $discountPolicy !== 'off' ? 1 : 0,
+            'discount_action' => $discountPolicy === 'deny' ? 'warn' : 'handoff',
+            'discount_message' => (string) ($currentLimits['discount_message'] ?? 'Posso encaminhar sua solicitação para o responsável avaliar uma condição possível. O assistente não autoriza descontos por conta própria.'),
+            'refund_rule_enabled' => $refundPolicy !== 'off' ? 1 : 0,
+            'refund_action' => $refundPolicy === 'deny' ? 'warn' : 'handoff',
+            'refund_message' => (string) ($currentLimits['refund_message'] ?? 'Essa decisão precisa ser avaliada pela equipe responsável. Vou encaminhar sua solicitação.'),
+            'exception_rule_enabled' => $exceptionPolicy !== 'off' ? 1 : 0,
+            'exception_action' => $exceptionPolicy === 'deny' ? 'warn' : 'handoff',
+            'exception_message' => (string) ($currentLimits['exception_message'] ?? 'Essa exceção precisa ser analisada pela equipe. Posso encaminhar seu pedido para avaliação.'),
+            'minimum_age' => $ageRestricted ? max(0, min(130, (int) ($data['minimum_age'] ?? 0))) : 0,
+            'maximum_age' => $ageRestricted ? max(0, min(130, (int) ($data['maximum_age'] ?? 0))) : 0,
+            'age_action' => (string) ($data['age_action'] ?? ($currentLimits['age_action'] ?? 'block_schedule')),
+            'minimum_age_message' => (string) ($currentLimits['minimum_age_message'] ?? ''),
+            'maximum_age_message' => (string) ($currentLimits['maximum_age_message'] ?? ''),
+            'custom_case_enabled' => $customTerms !== '' ? 1 : 0,
+            'custom_case_terms' => $customTerms,
+            'custom_case_action' => 'handoff',
+            'custom_case_message' => (string) ($currentLimits['custom_case_message'] ?? 'Este caso precisa ser analisado pela equipe responsável. Vou encaminhar sua solicitação.'),
+            'emergency_rule_enabled' => !empty($data['emergency_rule_enabled']) ? 1 : 0,
+            'emergency_action' => 'handoff',
+            'emergency_message' => trim((string) ($data['emergency_message'] ?? ($currentLimits['emergency_message'] ?? 'Essa situação precisa de atenção humana. Vou encaminhar sua mensagem para a equipe responsável.'))),
+        ];
+
+        $attendancePayload = [
+            'start_time' => $start,
+            'end_time' => $end,
+            'days' => $days,
+            'business_timezone' => (string) ($data['business_timezone'] ?? 'America/Sao_Paulo'),
+            'after_hours_message' => (string) ($data['after_hours_message'] ?? ''),
+            'human_handoff_message' => (string) ($data['human_handoff_message'] ?? ''),
+            'cooldown_seconds' => (int) ($data['cooldown_seconds'] ?? 60),
+            'sla_enabled' => !empty($data['sla_enabled']) ? 1 : 0,
+            'sla_target_minutes' => (int) ($data['sla_target_minutes'] ?? 30),
+            'sla_warning_percent' => (int) ($data['sla_warning_percent'] ?? 80),
+            'sla_count_outside_hours' => !empty($data['sla_count_outside_hours']) ? 1 : 0,
+        ];
+
+        $agendaPayload = [
+            'calendar_mode' => $calendarMode,
+            'require_human_approval' => $humanApproval ? 1 : 0,
+            'ai_can_suggest_slots' => $agendaEnabled ? 1 : 0,
+            'ai_can_confirm' => $agendaEnabled && !$humanApproval ? 1 : 0,
+            'default_duration_minutes' => max(15, min(240, (int) ($data['default_duration_minutes'] ?? 60))),
+            'min_notice_hours' => max(0, min(720, (int) ($data['min_notice_hours'] ?? 2))),
+            'booking_capacity_mode' => $capacity > 1 ? 'capacity' : 'single',
+            'default_slot_capacity' => $capacity,
+            'internal_days' => $internalDays,
+            'internal_start' => $internalStart,
+            'internal_end' => $internalEnd,
+            'internal_availability_strategy' => (string) ($currentCalendar['internal_availability_strategy'] ?? 'calculated'),
+            'slot_interval_minutes' => (int) ($currentCalendar['slot_interval_minutes'] ?? 30),
+            'buffer_minutes' => (int) ($currentCalendar['buffer_minutes'] ?? 0),
+            'search_days_ahead' => (int) ($currentCalendar['search_days_ahead'] ?? 30),
+            'max_suggestions' => (int) ($currentCalendar['max_suggestions'] ?? 5),
+            'published_slots_respect_min_notice' => !empty($currentCalendar['published_slots_respect_min_notice']) ? 1 : 0,
+            'default_message' => (string) ($currentPreSchedule['default_message'] ?? 'A consulta de disponibilidade para {{dia_preferido}} às {{horario_preferido}} está em andamento.'),
+            'collect_message' => (string) ($currentPreSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.'),
+        ];
+
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $this->syncAssistedTriageAndWorkflow($tenantId, $selectedFields, $agendaEnabled);
+            $this->saveAttendance($tenantId, $attendancePayload, $userId);
+            $this->saveAgenda($tenantId, $agendaPayload, $userId);
+            $this->saveAgentLimits($tenantId, $limitsPayload, $userId);
+            $this->syncAssistedCapabilities($tenantId, $agendaEnabled, $humanApproval, $selectedFields !== [], $ageRestricted);
+
+            if ($this->tableExists('tenant_agent_profiles')) {
+                $this->pdo->prepare('UPDATE tenant_agent_profiles SET customized = 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = :tenant_id')
+                    ->execute(['tenant_id' => $tenantId]);
+            }
+
+            $this->recordEvent($tenantId, $userId, 'onboarding.business_operation_saved', 'Configuração essencial do atendimento salva e validada em uma única operação.', [
+                'triage_fields' => $selectedFields,
+                'calendar_enabled' => $agendaEnabled,
+                'calendar_mode' => $calendarMode,
+                'slot_capacity' => $capacity,
+                'human_approval' => $humanApproval,
+                'discount_policy' => $discountPolicy,
+                'refund_policy' => $refundPolicy,
+                'exception_policy' => $exceptionPolicy,
+                'age_restricted' => $ageRestricted,
+            ]);
+
+            if ($ownsTransaction) {
+                $this->pdo->commit();
+            }
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+
+        (new AgentConversationBehaviorService())->clearCache($tenantId);
     }
 
     /** @param array<string, mixed> $data */
@@ -688,6 +856,136 @@ final class OnboardingGuideService
             return ['status' => 'pending', 'message' => 'Revise o que o assistente pode ou não decidir sozinho e configure os casos que exigem resposta controlada ou encaminhamento.'];
         }
         return ['status' => 'complete', 'message' => 'Limites de autoridade e elegibilidade estão configurados no Policy Engine.'];
+    }
+
+    /** @param list<string> $selectedFields */
+    private function syncAssistedTriageAndWorkflow(int $tenantId, array $selectedFields, bool $agendaEnabled): void
+    {
+        if (!$this->tableExists('tenant_triage_fields')) {
+            if ($selectedFields !== []) {
+                throw new \RuntimeException('A estrutura de perguntas do assistente ainda não foi preparada para esta empresa.');
+            }
+            return;
+        }
+
+        $stmt = $this->pdo->prepare('SELECT field_key FROM tenant_triage_fields WHERE tenant_id = :tenant_id ORDER BY position, id');
+        $stmt->execute(['tenant_id' => $tenantId]);
+        $known = array_values(array_filter(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+        $selectedFields = array_values(array_intersect($known, $selectedFields));
+
+        $update = $this->pdo->prepare(
+            'UPDATE tenant_triage_fields
+             SET active = :active,
+                 required_before_schedule = :required_before_schedule,
+                 required_for_completion = :required_for_completion,
+                 source = CASE WHEN source = "blueprint" THEN "tenant" ELSE source END
+             WHERE tenant_id = :tenant_id AND field_key = :field_key'
+        );
+        foreach ($known as $fieldKey) {
+            $active = in_array($fieldKey, $selectedFields, true);
+            $update->execute([
+                'active' => $active ? 1 : 0,
+                'required_before_schedule' => $active && $agendaEnabled ? 1 : 0,
+                'required_for_completion' => $active ? 1 : 0,
+                'tenant_id' => $tenantId,
+                'field_key' => $fieldKey,
+            ]);
+        }
+
+        if (!$this->tableExists('tenant_agent_workflow_steps')) {
+            return;
+        }
+
+        $workflowStmt = $this->pdo->prepare(
+            'SELECT id, step_key, step_type, config_json, position
+             FROM tenant_agent_workflow_steps
+             WHERE tenant_id = :tenant_id
+             ORDER BY position, id'
+        );
+        $workflowStmt->execute(['tenant_id' => $tenantId]);
+        $workflow = $workflowStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $collectRows = array_values(array_filter($workflow, static fn (array $row): bool => ($row['step_type'] ?? '') === 'collect'));
+
+        if ($collectRows === [] && $selectedFields !== []) {
+            $firstActionPosition = 20;
+            foreach ($workflow as $row) {
+                if (($row['step_type'] ?? '') === 'action') {
+                    $firstActionPosition = max(20, (int) ($row['position'] ?? 20));
+                    break;
+                }
+            }
+            $this->pdo->prepare(
+                'INSERT INTO tenant_agent_workflow_steps
+                    (tenant_id, step_key, label, step_type, config_json, active, position, source)
+                 VALUES
+                    (:tenant_id, "assisted_intake", "Informações iniciais", "collect", :config_json, 1, :position, "tenant")'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'config_json' => json_encode(['field_keys' => $selectedFields], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'position' => max(1, $firstActionPosition - 10),
+            ]);
+        } elseif ($collectRows !== []) {
+            foreach ($collectRows as $index => $row) {
+                $config = json_decode((string) ($row['config_json'] ?? ''), true);
+                $config = is_array($config) ? $config : [];
+                $config['field_keys'] = $index === 0 ? $selectedFields : [];
+                unset($config['field_key']);
+                $this->pdo->prepare(
+                    'UPDATE tenant_agent_workflow_steps
+                     SET config_json = :config_json, active = :active, source = "tenant"
+                     WHERE id = :id AND tenant_id = :tenant_id'
+                )->execute([
+                    'config_json' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    'active' => $index === 0 && $selectedFields !== [] ? 1 : 0,
+                    'id' => (int) $row['id'],
+                    'tenant_id' => $tenantId,
+                ]);
+            }
+        }
+
+        // A ação de agenda continua cadastrada, mas só participa do fluxo quando a
+        // empresa realmente habilitou agendamento. Isso evita etapas fantasmas.
+        foreach ($workflow as $row) {
+            if (($row['step_type'] ?? '') !== 'action') continue;
+            $config = json_decode((string) ($row['config_json'] ?? ''), true);
+            $actionKey = is_array($config) ? trim((string) ($config['action_key'] ?? '')) : '';
+            if ($actionKey === 'calendar.pre_schedule' || str_starts_with((string) ($row['step_key'] ?? ''), 'calendar')) {
+                $this->pdo->prepare('UPDATE tenant_agent_workflow_steps SET active = :active WHERE id = :id AND tenant_id = :tenant_id')
+                    ->execute(['active' => $agendaEnabled ? 1 : 0, 'id' => (int) $row['id'], 'tenant_id' => $tenantId]);
+            }
+        }
+    }
+
+    /** @param list<string> $selectedFields */
+    private function syncAssistedCapabilities(int $tenantId, bool $agendaEnabled, bool $humanApproval, bool $triageEnabled, bool $ageRestricted): void
+    {
+        if (!$this->tableExists('tenant_agent_capabilities')) {
+            return;
+        }
+        $capabilities = [
+            'triage.enabled' => $triageEnabled,
+            'eligibility.enabled' => $ageRestricted,
+            'policy.fail_closed' => true,
+            'calendar.read' => $agendaEnabled,
+            'calendar.pre_schedule' => $agendaEnabled,
+            'calendar.confirm' => $agendaEnabled && !$humanApproval,
+            'calendar.human_approval' => $agendaEnabled && $humanApproval,
+        ];
+        foreach ($capabilities as $key => $enabled) {
+            $this->pdo->prepare(
+                'DELETE FROM tenant_agent_capabilities
+                 WHERE tenant_id = :tenant_id AND agent_id IS NULL AND capability_key = :capability_key'
+            )->execute(['tenant_id' => $tenantId, 'capability_key' => $key]);
+            $this->pdo->prepare(
+                'INSERT INTO tenant_agent_capabilities
+                    (tenant_id, agent_id, capability_key, enabled, source)
+                 VALUES (:tenant_id, NULL, :capability_key, :enabled, "tenant")'
+            )->execute([
+                'tenant_id' => $tenantId,
+                'capability_key' => $key,
+                'enabled' => $enabled ? 1 : 0,
+            ]);
+        }
     }
 
     private function normalizeLimitAction(string $action, array $allowed): string

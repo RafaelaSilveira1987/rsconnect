@@ -58,6 +58,29 @@ foreach ($instances as $candidateInstance) {
     }
 }
 
+// A Ativação Assistida trabalha com conceitos de negócio. As estruturas técnicas
+// continuam existindo por trás, mas a tela principal não expõe workflow, capabilities
+// ou chaves internas para o usuário final.
+$triageFields = is_array($agentBlueprintProfile['triage_fields'] ?? null) ? $agentBlueprintProfile['triage_fields'] : [];
+$activeTriageKeys = [];
+foreach ($triageFields as $triageField) {
+    if (!empty($triageField['active'])) {
+        $activeTriageKeys[] = (string) ($triageField['field_key'] ?? '');
+    }
+}
+$activeTriageKeys = array_values(array_filter(array_unique($activeTriageKeys)));
+$agendaEnabledForBusiness = $calendarMode !== 'none';
+$businessCapacity = $bookingCapacityMode === 'capacity' ? max(2, $defaultSlotCapacity) : 1;
+$businessHumanApproval = (int) ($preSchedule['require_human_approval'] ?? 1) === 1;
+$minimumAgeConfigured = max(0, (int) ($agentLimits['minimum_age'] ?? 0));
+$maximumAgeConfigured = max(0, (int) ($agentLimits['maximum_age'] ?? 0));
+$hasAgeRestriction = $minimumAgeConfigured > 0 || $maximumAgeConfigured > 0;
+$businessLimitCount = 0;
+foreach (['discount_rule_enabled', 'refund_rule_enabled', 'exception_rule_enabled', 'custom_case_enabled', 'emergency_rule_enabled'] as $limitFlag) {
+    if (!empty($agentLimits[$limitFlag])) $businessLimitCount++;
+}
+if ($hasAgeRestriction) $businessLimitCount++;
+
 $hours = ['start' => '08:00', 'end' => '18:00', 'days' => ['mon', 'tue', 'wed', 'thu', 'fri']];
 $hoursSource = $attendanceSettings['business_hours_json'] ?? ($defaultAgent['business_hours_json'] ?? null);
 if (!empty($hoursSource)) {
@@ -120,6 +143,12 @@ if (!isset($stepsByKey[$activeStepKey]) && $steps) {
     $activeStepKey = (string) ($steps[0]['key'] ?? 'company_profile');
 }
 $activeStep = $stepsByKey[$activeStepKey] ?? null;
+$businessOperationKeys = ['attendance_rules', 'agenda_setup', 'agent_limits'];
+if ($activeStep && in_array($activeStepKey, $businessOperationKeys, true)) {
+    $activeStep['title'] = 'Como seu atendimento deve funcionar';
+    $activeStep['description'] = 'Responda às perguntas abaixo em linguagem simples. O RS Connect organiza perguntas, agenda, permissões e limites automaticamente.';
+    $activeStep['message'] = 'Revise as regras principais e use “Salvar e verificar”. Você não precisa montar fluxo técnico.';
+}
 
 $activationPhases = [
     ['key' => 'company', 'label' => 'Sua empresa', 'help' => 'Cadastro e privacidade', 'steps' => ['company_profile', 'lgpd_acceptance']],
@@ -179,7 +208,7 @@ foreach ($activationPhases as $phaseIndex => $phase) {
         <a class="onboarding-phase-card is-<?= View::e((string) $phase['status']) ?>" href="<?= View::e(Router::url('/onboarding?step=' . $phase['anchor'])) ?>#<?= View::e((string) $phase['anchor']) ?>">
             <span class="onboarding-phase-number"><?= $phaseIndex + 1 ?></span>
             <span class="onboarding-phase-copy"><strong><?= View::e((string) $phase['label']) ?></strong><small><?= View::e((string) $phase['help']) ?></small></span>
-            <span class="onboarding-phase-progress"><?= (int) $phase['done'] ?>/<?= (int) $phase['total'] ?></span>
+            <span class="onboarding-phase-progress"><?= $phase['status'] === 'complete' ? '✓' : (!empty($phase['active']) ? 'Agora' : '') ?></span>
         </a>
     <?php endforeach; ?>
 </nav>
@@ -196,21 +225,17 @@ foreach ($activationPhases as $phaseIndex => $phase) {
 </section>
 
 <div class="onboarding-guide-layout onboarding-assist-layout">
-    <aside class="card onboarding-steps-card onboarding-ready-summary">
+    <aside class="card onboarding-steps-card onboarding-ready-summary onboarding-business-summary">
         <div class="section-heading compact-heading">
-            <div><span class="eyebrow">Resumo</span><h2>O que já está pronto</h2></div>
+            <div><span class="eyebrow">Seu atendimento</span><h2>Visão rápida</h2></div>
         </div>
-        <div class="onboarding-ready-list">
-            <?php foreach ($steps as $summaryStep): ?>
-                <?php $summaryDone = in_array((string) ($summaryStep['status'] ?? ''), ['complete', 'skipped'], true); ?>
-                <?php if (!$summaryDone) continue; ?>
-                <a href="<?= View::e(Router::url('/onboarding?step=' . ($summaryStep['key'] ?? ''))) ?>#<?= View::e((string) ($summaryStep['key'] ?? '')) ?>">
-                    <span>✓</span><strong><?= View::e((string) ($summaryStep['short'] ?? $summaryStep['title'] ?? 'Etapa')) ?></strong><small>Editar</small>
-                </a>
-            <?php endforeach; ?>
-            <?php if ((int) ($summary['done'] ?? 0) === 0): ?><p class="muted-text">Ainda não há etapas concluídas. Comece pela tarefa ao lado.</p><?php endif; ?>
+        <div class="business-summary-list">
+            <div class="<?= (int) ($company['business_niche_id'] ?? 0) > 0 ? 'is-ready' : '' ?>"><span><?= (int) ($company['business_niche_id'] ?? 0) > 0 ? '✓' : '•' ?></span><p><strong>Empresa</strong><small><?= View::e((string) ($company['segment'] ?? 'Segmento ainda não definido')) ?></small></p></div>
+            <div class="<?= count($activeTriageKeys) > 0 ? 'is-ready' : '' ?>"><span><?= count($activeTriageKeys) > 0 ? '✓' : '•' ?></span><p><strong>Informações do atendimento</strong><small><?= count($activeTriageKeys) ?> selecionada(s)</small></p></div>
+            <div class="<?= in_array((string) ($stepsByKey['agenda_setup']['status'] ?? ''), ['complete', 'skipped'], true) ? 'is-ready' : '' ?>"><span><?= in_array((string) ($stepsByKey['agenda_setup']['status'] ?? ''), ['complete', 'skipped'], true) ? '✓' : '•' ?></span><p><strong>Agenda</strong><small><?= $agendaEnabledForBusiness ? ($businessCapacity > 1 ? $businessCapacity . ' pessoas por horário' : 'Atendimento individual') : 'Sem agendamento pelo WhatsApp' ?></small></p></div>
+            <div class="<?= $hasConnectedInstance ? 'is-ready' : '' ?>"><span><?= $hasConnectedInstance ? '✓' : '•' ?></span><p><strong>WhatsApp</strong><small><?= $hasConnectedInstance ? 'Conectado' : 'Ainda precisa conectar' ?></small></p></div>
         </div>
-        <div class="onboarding-simple-note"><strong>Configuração expressa</strong><span>Opções técnicas ficam recolhidas em “Ajustes avançados” e já vêm com valores recomendados.</span></div>
+        <div class="onboarding-simple-note"><strong>Sem termos técnicos</strong><span>Você informa como a empresa trabalha. O RS Connect monta e valida a configuração por trás.</span></div>
     </aside>
 
     <main class="onboarding-main-flow">
@@ -220,20 +245,30 @@ foreach ($activationPhases as $phaseIndex => $phase) {
             $stepDone = in_array((string) ($step['status'] ?? ''), ['complete', 'skipped'], true);
             $stepCurrent = true;
             $stepAccessible = (string) ($step['status'] ?? '') !== 'blocked' || !empty($summary['is_complete']);
+            $isBusinessOperation = in_array((string) ($step['key'] ?? ''), $businessOperationKeys, true);
+            $displayStepTitle = $isBusinessOperation ? 'Como seu atendimento deve funcionar' : (string) ($step['title'] ?? 'Configuração');
+            $displayStepDescription = $isBusinessOperation
+                ? 'Responda em linguagem simples. O RS Connect organiza perguntas, agenda, permissões e limites automaticamente.'
+                : (string) ($step['description'] ?? '');
+            $displayStepMessage = $isBusinessOperation
+                ? 'Revise as regras principais e use “Salvar e verificar”. Você não precisa montar fluxo técnico.'
+                : (string) ($step['message'] ?? '');
             ?>
             <section class="card onboarding-step-panel <?= View::e($statusClass((string) $step['status'])) ?><?= $stepCurrent ? ' is-current' : '' ?><?= !$stepAccessible ? ' is-locked' : '' ?>" id="<?= View::e($step['key']) ?>">
                 <div class="onboarding-step-head">
                     <div class="step-number"><?= (int) $activePhaseNumber ?></div>
                     <div>
                         <span class="eyebrow">Bloco <?= (int) $activePhaseNumber ?> de 4 · <?= View::e($activePhaseLabel) ?></span>
-                        <h2><?= View::e($step['title']) ?></h2>
-                        <p><?= View::e($step['description'] ?? '') ?></p>
+                        <h2><?= View::e($displayStepTitle) ?></h2>
+                        <p><?= View::e($displayStepDescription) ?></p>
                     </div>
                     <span class="badge <?= View::e($step['status_badge'] ?? 'badge-warning') ?>"><?= View::e($step['status_label'] ?? 'Pendente') ?></span>
                 </div>
-                <div class="onboarding-step-message">
-                    <strong>Status atual:</strong> <?= View::e($step['message'] ?? '') ?>
-                </div>
+                <?php if (!$isBusinessOperation): ?>
+                    <div class="onboarding-step-message">
+                        <strong>Status atual:</strong> <?= View::e($displayStepMessage) ?>
+                    </div>
+                <?php endif; ?>
 
                 <?php if (!$stepAccessible): ?>
                     <div class="onboarding-locked-message"><strong>Etapa ainda bloqueada</strong><span>Conclua a etapa anterior para liberar esta configuração.</span></div>
@@ -338,244 +373,141 @@ foreach ($activationPhases as $phaseIndex => $phase) {
                         <div class="message-info onboarding-assistant-advanced-note"><strong>Configurações avançadas ficam para depois.</strong><span>Modelo de IA, instruções técnicas, memória e outros ajustes permanecem disponíveis na área de Assistentes, mas não são necessários para colocar o atendimento inicial em funcionamento.</span></div>
                         <div class="form-actions"><button class="btn btn-primary" type="submit" <?= !$hasConnectedInstance ? 'disabled' : '' ?>>Salvar assistente e continuar</button></div>
                     </form>
-                <?php elseif ($step['key'] === 'attendance_rules'): ?>
-                    <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/attendance')) ?>">
+                <?php elseif (in_array($step['key'], $businessOperationKeys, true)): ?>
+                    <form class="wizard-card onboarding-inline-form onboarding-business-operation" method="post" action="<?= View::e(Router::url('/onboarding/operation')) ?>" data-business-operation>
                         <?= Csrf::input() ?>
-                        <div class="onboarding-pre-agent-note"><strong>Defina quando sua equipe atende.</strong><span>Mensagens e parâmetros técnicos já vêm preenchidos com valores recomendados e podem ser ajustados somente se necessário.</span></div>
-                        <section class="onboarding-essential-card">
-                            <div class="section-heading compact"><div><span class="eyebrow">Essencial</span><h3>Dias e horário de atendimento</h3><p>Essas informações controlam quando o agente considera a empresa aberta ou fora do expediente.</p></div></div>
-                            <div class="form-grid two">
-                                <label class="field"><span>Início do atendimento</span><input type="time" name="start_time" value="<?= View::e($hours['start'] ?? '08:00') ?>"></label>
-                                <label class="field"><span>Fim do atendimento</span><input type="time" name="end_time" value="<?= View::e($hours['end'] ?? '18:00') ?>"></label>
-                            </div>
-                            <div class="field"><span>Dias de atendimento</span><div class="inline-checks onboarding-day-picker"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, (array) ($hours['days'] ?? []), true) ? 'checked' : '' ?>> <?= View::e($label) ?></label><?php endforeach; ?></div></div>
-                        </section>
 
-                        <details class="onboarding-simple-details">
-                            <summary><span><strong>Ajustes avançados</strong><small>Mensagens, SLA, fuso horário e tempo de agrupamento</small></span><em>Opcional</em></summary>
-                            <div class="onboarding-simple-details-body">
-                                <label class="field"><span>Fuso horário</span><input name="business_timezone" value="<?= View::e($attendanceSettings['business_timezone'] ?? ($defaultAgent['business_timezone'] ?? 'America/Sao_Paulo')) ?>"></label>
-                                <div class="onboarding-sla-policy" data-sla-policy>
-                                    <div class="section-heading compact onboarding-sla-heading">
-                                        <div><span class="eyebrow">SLA operacional</span><h3>Primeira resposta humana</h3><p>Ative somente se sua equipe quiser medir e receber alertas sobre tempo de resposta.</p></div>
-                                        <label class="onboarding-enable-toggle">
-                                            <input type="hidden" name="sla_enabled" value="0">
-                                            <input type="checkbox" name="sla_enabled" value="1" data-sla-enabled <?= $slaEnabled ? 'checked' : '' ?>>
-                                            <span><strong>Medir SLA</strong><small><?= $slaEnabled ? 'Ativado' : 'Desativado' ?></small></span>
+                        <div class="business-operation-overview" aria-label="Resumo da configuração atual">
+                            <div><span>Informações</span><strong><?= count($activeTriageKeys) ?> selecionada(s)</strong><small>O que o assistente precisa saber.</small></div>
+                            <div><span>Agenda</span><strong><?= $agendaEnabledForBusiness ? 'Pelo WhatsApp' : 'Sem agendamento' ?></strong><small><?= $agendaEnabledForBusiness ? ($businessCapacity > 1 ? $businessCapacity . ' pessoas por horário' : '1 pessoa por horário') : 'Pode ser ativada quando quiser' ?></small></div>
+                            <div><span>Confirmação</span><strong><?= !$agendaEnabledForBusiness ? 'Não se aplica' : ($businessHumanApproval ? 'Pela equipe' : 'Automática') ?></strong><small><?= $agendaEnabledForBusiness && $businessHumanApproval ? 'O agente pré-reserva e aguarda.' : 'Regra definida pela empresa.' ?></small></div>
+                            <div><span>Limites</span><strong><?= $businessLimitCount ?> regra(s)</strong><small>Casos em que o agente não decide sozinho.</small></div>
+                        </div>
+
+                        <section class="business-question-card">
+                            <div class="business-question-heading">
+                                <span class="business-question-number">1</span>
+                                <div><h3>O que o assistente precisa perguntar?</h3><p>Marque somente as informações realmente necessárias. O RS Connect faz uma pergunta por vez e respeita esta seleção.</p></div>
+                            </div>
+                            <?php if ($triageFields): ?>
+                                <div class="business-check-grid">
+                                    <?php foreach ($triageFields as $field): ?>
+                                        <?php
+                                        $fieldKey = (string) ($field['field_key'] ?? '');
+                                        $fieldLabel = trim((string) ($field['label'] ?? $fieldKey));
+                                        $fieldPrompt = trim((string) ($field['prompt_text'] ?? ''));
+                                        $fieldChecked = in_array($fieldKey, $activeTriageKeys, true);
+                                        ?>
+                                        <label class="business-check-card">
+                                            <input type="checkbox" name="triage_fields[]" value="<?= View::e($fieldKey) ?>" <?= $fieldChecked ? 'checked' : '' ?>>
+                                            <span><strong><?= View::e($fieldLabel !== '' ? $fieldLabel : 'Informação') ?></strong><?php if ($fieldPrompt !== ''): ?><small><?= View::e($fieldPrompt) ?></small><?php endif; ?></span>
                                         </label>
-                                    </div>
-                                    <div class="form-grid three onboarding-sla-fields" data-sla-fields <?= $slaEnabled ? '' : 'hidden' ?>>
-                                        <label class="field"><span>Meta da 1ª resposta</span><div class="team-report-sla-input"><input type="number" name="sla_target_minutes" min="5" max="1440" step="5" value="<?= (int) ($slaSettings['target_minutes'] ?? 30) ?>"><small>min</small></div></label>
-                                        <label class="field"><span>Alerta preventivo</span><div class="team-report-sla-input"><input type="number" name="sla_warning_percent" min="50" max="99" step="1" value="<?= (int) ($slaSettings['warning_percent'] ?? 80) ?>"><small>%</small></div></label>
-                                        <label class="field checkbox-field sla-clock-toggle"><span>Relógio fora do expediente</span><span class="checkbox-control"><input type="checkbox" name="sla_count_outside_hours" value="1" <?= !empty($slaSettings['count_outside_business_hours']) ? 'checked' : '' ?>><span>Contabilizar também fora do horário</span></span></label>
-                                    </div>
+                                    <?php endforeach; ?>
                                 </div>
-                                <label class="field"><span>Mensagem fora de horário</span><textarea name="after_hours_message" rows="3"><?= View::e($attendanceSettings['after_hours_message'] ?? ($defaultAgent['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')) ?></textarea></label>
-                                <label class="field"><span>Mensagem de encaminhamento humano</span><textarea name="human_handoff_message" rows="3"><?= View::e($attendanceSettings['human_handoff_message'] ?? ($defaultAgent['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')) ?></textarea></label>
-                                <label class="field"><span>Tempo de espera da IA (seg.)</span><input type="number" name="cooldown_seconds" min="0" max="3600" value="<?= (int) ($attendanceSettings['cooldown_seconds'] ?? ($defaultAgent['cooldown_seconds'] ?? 60)) ?>"><small class="field-hint">Agrupa mensagens enviadas em sequência antes de responder.</small></label>
-                            </div>
-                        </details>
-                        <div class="form-actions"><button class="btn btn-primary" type="submit">Continuar</button></div>
-                    </form>
-                <?php elseif ($step['key'] === 'agenda_setup'): ?>
-                    <form class="wizard-card onboarding-inline-form onboarding-calendar-form" method="post" action="<?= View::e(Router::url('/onboarding/agenda')) ?>" data-calendar-onboarding>
-                        <?= Csrf::input() ?>
-                        <div class="onboarding-pre-agent-note"><strong>Escolha a origem da disponibilidade</strong><span>Essa decisão define se os horários serão controlados pelo próprio RS Connect, por uma integração homologada pela RS ou se a empresa não utilizará agenda.</span></div>
-
-                        <div class="calendar-mode-grid" role="radiogroup" aria-label="Tipo de agenda">
-                            <label class="calendar-mode-card <?= $calendarMode === 'none' ? 'is-selected' : '' ?>">
-                                <input type="radio" name="calendar_mode" value="none" <?= $calendarMode === 'none' ? 'checked' : '' ?>>
-                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="m8 13 8 8M16 13l-8 8"/></svg></span>
-                                <span><strong>Não utilizar agenda</strong><small>A IA atende normalmente, mas não consulta nem registra horários.</small></span>
-                            </label>
-                            <label class="calendar-mode-card <?= $calendarMode === 'internal' ? 'is-selected' : '' ?>">
-                                <input type="radio" name="calendar_mode" value="internal" <?= $calendarMode === 'internal' ? 'checked' : '' ?>>
-                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="m8 14 2 2 5-5"/></svg></span>
-                                <span><strong>Agenda interna do RS Connect</strong><small>Disponibilidade, bloqueios e compromissos ficam no banco da plataforma, sem n8n e sem Google Calendar.</small></span>
-                            </label>
-                            <label class="calendar-mode-card <?= $calendarMode === 'smart' ? 'is-selected' : '' ?> <?= !$smartCalendarReady ? 'is-locked' : '' ?>">
-                                <input type="radio" name="calendar_mode" value="smart" <?= $calendarMode === 'smart' ? 'checked' : '' ?> <?= !$smartCalendarReady ? 'disabled' : '' ?>>
-                                <span class="calendar-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/><path d="M12 11v6M9 14h6"/></svg></span>
-                                <span><strong>Agenda inteligente integrada</strong><small><?= $smartCalendarReady ? 'Integração técnica homologada e liberada pela equipe RS Connect.' : ($smartCalendarStatus === 'configuring' ? 'A integração está sendo preparada pela equipe RS Connect.' : 'Disponível somente após liberação e homologação do Super Admin.') ?></small></span>
-                                <?php if (!$smartCalendarReady): ?><em class="badge badge-warning"><?= $smartCalendarStatus === 'configuring' ? 'Em configuração' : 'Não liberada' ?></em><?php endif; ?>
-                            </label>
-                        </div>
-
-                        <section class="calendar-mode-panel" data-calendar-mode-panel="internal" <?= $calendarMode === 'internal' ? '' : 'hidden' ?>>
-                            <div class="section-heading compact"><div><span class="eyebrow">Agenda interna</span><h3>Como seus horários funcionam?</h3><p>Por padrão, usamos os mesmos dias e horários informados na etapa anterior. Ajuste somente se a agenda funcionar de outro jeito.</p></div><span class="badge badge-success">Sem integração externa</span></div>
-
-                            <div class="onboarding-choice-grid" role="radiogroup" aria-label="Capacidade por horário">
-                                <label class="onboarding-choice-card <?= $bookingCapacityMode === 'single' ? 'is-selected' : '' ?>">
-                                    <input type="radio" name="booking_capacity_mode" value="single" <?= $bookingCapacityMode === 'single' ? 'checked' : '' ?>>
-                                    <span><strong>Uma pessoa por horário</strong><small>Modelo padrão para consultas e serviços individuais.</small></span>
-                                </label>
-                                <label class="onboarding-choice-card <?= $bookingCapacityMode === 'capacity' ? 'is-selected' : '' ?>">
-                                    <input type="radio" name="booking_capacity_mode" value="capacity" <?= $bookingCapacityMode === 'capacity' ? 'checked' : '' ?>>
-                                    <span><strong>Mais de uma pessoa no mesmo horário</strong><small>Ideal para pilates, turmas e atendimentos com capacidade.</small></span>
-                                </label>
-                            </div>
-                            <label class="field onboarding-capacity-field" data-capacity-field <?= $bookingCapacityMode === 'capacity' ? '' : 'hidden' ?>><span>Quantas pessoas por horário?</span><input type="number" name="default_slot_capacity" min="2" max="100" value="<?= (int) $defaultSlotCapacity ?>"><small>Ex.: capacidade 4 → o horário permanece disponível até chegar a 4/4.</small></label>
-
-                            <details class="onboarding-simple-details">
-                                <summary><span><strong>Ajustar dias e horários da agenda</strong><small>Use somente se forem diferentes do horário de atendimento</small></span><em>Opcional</em></summary>
-                                <div class="onboarding-simple-details-body">
-                                    <div class="internal-calendar-days">
-                                        <?php foreach ($calendarDayLabels as $dayNumber => $dayLabel): ?>
-                                            <?php $dayConfig = $internalHoursByDay[(string) $dayNumber]; ?>
-                                            <div class="internal-calendar-day">
-                                                <label class="internal-day-toggle"><input type="checkbox" name="internal_days[]" value="<?= $dayNumber ?>" <?= !empty($dayConfig['enabled']) ? 'checked' : '' ?>><span><?= View::e($dayLabel) ?></span></label>
-                                                <label class="field"><span>Início</span><input type="time" name="internal_start[<?= $dayNumber ?>]" value="<?= View::e((string) ($dayConfig['start'] ?? '08:00')) ?>"></label>
-                                                <label class="field"><span>Fim</span><input type="time" name="internal_end[<?= $dayNumber ?>]" value="<?= View::e((string) ($dayConfig['end'] ?? '18:00')) ?>"></label>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                            </details>
+                            <?php else: ?>
+                                <div class="message-warning"><strong>O segmento ainda não preparou perguntas iniciais.</strong><span>Volte ao cadastro da empresa e confirme o segmento/modelo antes de continuar.</span></div>
+                            <?php endif; ?>
+                            <div class="business-consequence"><strong>Resultado:</strong><span>As informações marcadas serão coletadas antes de qualquer agendamento. Campos desmarcados deixam de bloquear o atendimento.</span></div>
                         </section>
 
-                        <section class="calendar-mode-panel" data-calendar-mode-panel="smart" <?= $calendarMode === 'smart' ? '' : 'hidden' ?>>
-                            <div class="message-info"><strong>Integração administrada pela RS Connect</strong><span>Credenciais e integrações são preparadas pela equipe RS. Você define apenas duração, antecedência e quem confirma o horário.</span></div>
-                        </section>
-
-                        <section class="calendar-commercial-rules" data-calendar-commercial-rules <?= $calendarMode === 'none' ? 'hidden' : '' ?>>
-                            <div class="section-heading compact"><div><span class="eyebrow">Regras do negócio</span><h3>Como o agendamento deve funcionar?</h3><p>Estas são as decisões que realmente mudam o comportamento do agente.</p></div></div>
+                        <section class="business-question-card">
+                            <div class="business-question-heading">
+                                <span class="business-question-number">2</span>
+                                <div><h3>Quando sua equipe atende?</h3><p>Escolha os dias e o horário normal de funcionamento. Isso também orienta mensagens fora do expediente.</p></div>
+                            </div>
                             <div class="form-grid two">
-                                <label class="field"><span>Duração padrão</span><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($calendarAvailability['default_duration_minutes'] ?? $preSchedule['default_duration_minutes'] ?? 60) ?>"><span>min</span></div></label>
-                                <label class="field"><span>Antecedência mínima</span><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($calendarAvailability['min_notice_hours'] ?? 2) ?>"><span>hora(s)</span></div><small>Quanto tempo antes o cliente precisa solicitar.</small></label>
+                                <label class="field"><span>Começa às</span><input type="time" name="start_time" value="<?= View::e($hours['start'] ?? '08:00') ?>" required></label>
+                                <label class="field"><span>Termina às</span><input type="time" name="end_time" value="<?= View::e($hours['end'] ?? '18:00') ?>" required></label>
                             </div>
-                            <div class="onboarding-choice-grid" role="radiogroup" aria-label="Confirmação do agendamento">
-                                <label class="onboarding-choice-card <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 1 ? 'is-selected' : '' ?>">
-                                    <input type="radio" name="require_human_approval" value="1" <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                    <span><strong>A equipe confirma</strong><small>O agente faz a pré-reserva e aguarda aprovação humana.</small></span>
-                                </label>
-                                <label class="onboarding-choice-card <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 0 ? 'is-selected' : '' ?>">
-                                    <input type="radio" name="require_human_approval" value="0" <?= (int) ($preSchedule['require_human_approval'] ?? 1) === 0 ? 'checked' : '' ?>>
-                                    <span><strong>Confirmar automaticamente</strong><small>Somente quando a disponibilidade real estiver validada.</small></span>
-                                </label>
-                            </div>
-                            <input type="hidden" name="ai_can_suggest_slots" value="1">
-                            <input type="hidden" name="ai_can_confirm" value="1">
-
-                            <details class="onboarding-simple-details">
-                                <summary><span><strong>Ajustes avançados da agenda</strong><small>Intervalos, janela de busca e textos enviados ao cliente</small></span><em>Opcional</em></summary>
-                                <div class="onboarding-simple-details-body">
-                                    <div class="form-grid three">
-                                        <label class="field"><span>Intervalo entre opções</span><input type="number" name="slot_interval_minutes" min="5" max="240" value="<?= (int) ($calendarAvailability['slot_interval_minutes'] ?? 30) ?>"><small>Ex.: opções a cada 30 minutos.</small></label>
-                                        <label class="field"><span>Intervalo de segurança</span><input type="number" name="buffer_minutes" min="0" max="180" value="<?= (int) ($calendarAvailability['buffer_minutes'] ?? 0) ?>"><small>Margem entre atendimentos.</small></label>
-                                        <label class="field"><span>Dias para pesquisar</span><input type="number" name="search_days_ahead" min="1" max="90" value="<?= (int) ($calendarAvailability['search_days_ahead'] ?? 30) ?>"></label>
-                                        <label class="field"><span>Máximo de sugestões</span><input type="number" name="max_suggestions" min="1" max="20" value="<?= (int) ($calendarAvailability['max_suggestions'] ?? 5) ?>"></label>
+                            <div class="business-day-grid"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, (array) ($hours['days'] ?? []), true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                            <details class="business-inline-optional">
+                                <summary>Mensagem fora do horário e SLA <small>opcional</small></summary>
+                                <div class="business-inline-optional-body">
+                                    <label class="field"><span>Mensagem fora do horário</span><textarea name="after_hours_message" rows="3"><?= View::e($attendanceSettings['after_hours_message'] ?? ($defaultAgent['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')) ?></textarea></label>
+                                    <label class="field"><span>Mensagem ao encaminhar para a equipe</span><textarea name="human_handoff_message" rows="3"><?= View::e($attendanceSettings['human_handoff_message'] ?? ($defaultAgent['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')) ?></textarea></label>
+                                    <div class="business-toggle-row">
+                                        <label><input type="hidden" name="sla_enabled" value="0"><input type="checkbox" name="sla_enabled" value="1" data-sla-enabled <?= $slaEnabled ? 'checked' : '' ?>><span><strong>Medir tempo da primeira resposta humana</strong><small>Ative somente se quiser acompanhar SLA.</small></span></label>
                                     </div>
-                                    <label class="field"><span>Mensagem para coletar dia/horário</span><textarea name="collect_message" rows="3"><?= View::e($preSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.') ?></textarea></label>
-                                    <label class="field"><span>Mensagem após registrar preferência</span><textarea name="default_message" rows="3"><?= View::e($preSchedule['default_message'] ?? 'Vou registrar sua preferência e encaminhar para confirmação.') ?></textarea></label>
+                                    <div class="form-grid three" data-sla-fields <?= $slaEnabled ? '' : 'hidden' ?>>
+                                        <label class="field"><span>Meta da 1ª resposta</span><div class="input-with-suffix"><input type="number" name="sla_target_minutes" min="5" max="1440" step="5" value="<?= (int) ($slaSettings['target_minutes'] ?? 30) ?>"><span>min</span></div></label>
+                                        <label class="field"><span>Alerta em</span><div class="input-with-suffix"><input type="number" name="sla_warning_percent" min="50" max="99" value="<?= (int) ($slaSettings['warning_percent'] ?? 80) ?>"><span>%</span></div></label>
+                                        <label class="checkbox-field"><span>Fora do expediente</span><span class="checkbox-control"><input type="checkbox" name="sla_count_outside_hours" value="1" <?= !empty($slaSettings['count_outside_business_hours']) ? 'checked' : '' ?>><span>Contabilizar</span></span></label>
+                                    </div>
+                                    <input type="hidden" name="business_timezone" value="<?= View::e($attendanceSettings['business_timezone'] ?? ($defaultAgent['business_timezone'] ?? 'America/Sao_Paulo')) ?>">
+                                    <input type="hidden" name="cooldown_seconds" value="<?= (int) ($attendanceSettings['cooldown_seconds'] ?? ($defaultAgent['cooldown_seconds'] ?? 60)) ?>">
                                 </div>
                             </details>
                         </section>
 
-                        <div class="form-actions"><button class="btn btn-primary" type="submit">Continuar</button></div>
-                    </form>
-                    <script>
-                    document.addEventListener('DOMContentLoaded', function () {
-                        var form = document.querySelector('[data-calendar-onboarding]');
-                        if (!form) return;
-                        var refresh = function () {
-                            var selected = form.querySelector('input[name="calendar_mode"]:checked');
-                            var mode = selected ? selected.value : 'none';
-                            form.querySelectorAll('.calendar-mode-card').forEach(function (card) {
-                                var input = card.querySelector('input[name="calendar_mode"]');
-                                card.classList.toggle('is-selected', !!input && input.checked);
-                            });
-                            form.querySelectorAll('[data-calendar-mode-panel]').forEach(function (panel) {
-                                panel.hidden = panel.getAttribute('data-calendar-mode-panel') !== mode;
-                            });
-                            var rules = form.querySelector('[data-calendar-commercial-rules]');
-                            if (rules) rules.hidden = mode === 'none';
-                        };
-                        var refreshChoices = function () {
-                            form.querySelectorAll('.onboarding-choice-card').forEach(function (card) {
-                                var input = card.querySelector('input[type="radio"]');
-                                card.classList.toggle('is-selected', !!input && input.checked);
-                            });
-                            var capacityMode = form.querySelector('input[name="booking_capacity_mode"]:checked');
-                            var capacityField = form.querySelector('[data-capacity-field]');
-                            if (capacityField) capacityField.hidden = !capacityMode || capacityMode.value !== 'capacity';
-                        };
-                        form.querySelectorAll('input[name="calendar_mode"]').forEach(function (input) { input.addEventListener('change', refresh); });
-                        form.querySelectorAll('.onboarding-choice-card input[type="radio"]').forEach(function (input) { input.addEventListener('change', refreshChoices); });
-                        refresh();
-                        refreshChoices();
-                    });
-                    </script>
-                <?php elseif ($step['key'] === 'lgpd_acceptance'): ?>
-                    <div class="onboarding-action-grid">
-                        <div>
-                            <h3>Privacidade e termos</h3>
-                            <p class="muted-text">Acesse a central LGPD para revisar política, termo e aceite obrigatório da empresa.</p>
-                        </div>
-                        <div class="onboarding-actions-box">
-                            <a class="btn btn-primary btn-block" href="<?= View::e(Router::url('/privacy/accept')) ?>">Ler e aceitar os termos</a>
-                            <small class="field-hint">O aceite será registrado com usuário, data, versão da política e informações de auditoria.</small>
-                        </div>
-                    </div>
-                <?php elseif ($step['key'] === 'agent_limits'): ?>
-                    <form class="wizard-card onboarding-inline-form" method="post" action="<?= View::e(Router::url('/onboarding/limits')) ?>">
-                        <?= Csrf::input() ?>
-                        <div class="onboarding-pre-agent-note">
-                            <strong>Limites são regras de negócio, não sugestões para a IA.</strong>
-                            <span>O RS Connect valida estas situações no Policy Engine antes do modelo responder ou executar uma ação crítica.</span>
-                        </div>
-
-                        <section class="onboarding-essential-card">
-                            <div class="section-heading compact"><div><span class="eyebrow">Essencial</span><h3>O que o assistente não pode decidir sozinho?</h3><p>Marque as situações que precisam de uma regra. As respostas recomendadas já estão preenchidas.</p></div></div>
-
-                            <div class="onboarding-policy-list">
-                                <div class="onboarding-policy-row">
-                                    <label class="checkbox-field"><span>Pedido de desconto</span><span class="checkbox-control"><input type="checkbox" name="discount_rule_enabled" value="1" <?= !empty($agentLimits['discount_rule_enabled']) ? 'checked' : '' ?>><span>Exigir regra</span></span></label>
-                                    <small>Impede que o agente invente ou conceda desconto sem autorização.</small>
-                                    <details class="onboarding-inline-details"><summary>Personalizar resposta</summary><div class="form-grid two"><label class="field"><span>O que fazer</span><select name="discount_action"><option value="handoff" <?= ($agentLimits['discount_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['discount_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option></select></label><label class="field"><span>Resposta</span><textarea name="discount_message" rows="3"><?= View::e($agentLimits['discount_message'] ?? '') ?></textarea></label></div></details>
+                        <section class="business-question-card">
+                            <div class="business-question-heading">
+                                <span class="business-question-number">3</span>
+                                <div><h3>O cliente pode agendar pelo WhatsApp?</h3><p>Se sim, defina apenas as regras de negócio. A estrutura da agenda é preparada automaticamente.</p></div>
+                            </div>
+                            <div class="business-binary-choice" role="radiogroup" aria-label="Agendamento pelo WhatsApp">
+                                <label><input type="radio" name="calendar_enabled" value="1" <?= $agendaEnabledForBusiness ? 'checked' : '' ?>><span><strong>Sim</strong><small>Consultar e reservar horários.</small></span></label>
+                                <label><input type="radio" name="calendar_enabled" value="0" <?= !$agendaEnabledForBusiness ? 'checked' : '' ?>><span><strong>Não</strong><small>O assistente não oferece horários.</small></span></label>
+                            </div>
+                            <div class="business-calendar-fields" data-business-calendar-fields <?= $agendaEnabledForBusiness ? '' : 'hidden' ?>>
+                                <div class="form-grid three">
+                                    <label class="field"><span>Duração do atendimento</span><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($calendarAvailability['default_duration_minutes'] ?? $preSchedule['default_duration_minutes'] ?? 60) ?>"><span>min</span></div></label>
+                                    <label class="field"><span>Pessoas no mesmo horário</span><input type="number" name="slot_capacity" min="1" max="100" value="<?= (int) $businessCapacity ?>"><small>Use 1 para atendimento individual.</small></label>
+                                    <label class="field"><span>Antecedência mínima</span><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($calendarAvailability['min_notice_hours'] ?? 2) ?>"><span>hora(s)</span></div></label>
                                 </div>
-
-                                <div class="onboarding-policy-row">
-                                    <label class="checkbox-field"><span>Reembolso / estorno</span><span class="checkbox-control"><input type="checkbox" name="refund_rule_enabled" value="1" <?= !empty($agentLimits['refund_rule_enabled']) ? 'checked' : '' ?>><span>Exigir regra</span></span></label>
-                                    <small>Evita promessas financeiras que dependem da equipe.</small>
-                                    <details class="onboarding-inline-details"><summary>Personalizar resposta</summary><div class="form-grid two"><label class="field"><span>O que fazer</span><select name="refund_action"><option value="handoff" <?= ($agentLimits['refund_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['refund_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option></select></label><label class="field"><span>Resposta</span><textarea name="refund_message" rows="3"><?= View::e($agentLimits['refund_message'] ?? '') ?></textarea></label></div></details>
+                                <div class="business-decision-block">
+                                    <span>Quem confirma o horário?</span>
+                                    <div class="business-binary-choice compact" role="radiogroup">
+                                        <label><input type="radio" name="approval_mode" value="human" <?= $businessHumanApproval ? 'checked' : '' ?>><span><strong>Minha equipe</strong><small>O agente pré-reserva e aguarda aprovação.</small></span></label>
+                                        <label><input type="radio" name="approval_mode" value="automatic" <?= !$businessHumanApproval ? 'checked' : '' ?>><span><strong>Automaticamente</strong><small>O cliente recebe a confirmação sem aprovação humana.</small></span></label>
+                                    </div>
                                 </div>
-
-                                <div class="onboarding-policy-row">
-                                    <label class="checkbox-field"><span>Encaixe ou exceção fora da regra</span><span class="checkbox-control"><input type="checkbox" name="exception_rule_enabled" value="1" <?= !empty($agentLimits['exception_rule_enabled']) ? 'checked' : '' ?>><span>Exigir regra</span></span></label>
-                                    <small>O agente não abre exceções de agenda ou operação por conta própria.</small>
-                                    <details class="onboarding-inline-details"><summary>Personalizar resposta</summary><div class="form-grid two"><label class="field"><span>O que fazer</span><select name="exception_action"><option value="handoff" <?= ($agentLimits['exception_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['exception_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option></select></label><label class="field"><span>Resposta</span><textarea name="exception_message" rows="3"><?= View::e($agentLimits['exception_message'] ?? '') ?></textarea></label></div></details>
-                                </div>
+                                <div class="business-consequence"><strong>Resultado:</strong><span data-calendar-consequence><?= $businessHumanApproval ? 'O agente consulta a disponibilidade, segura a vaga e aguarda sua equipe confirmar.' : 'O agente consulta a disponibilidade e confirma o horário quando todas as regras estiverem atendidas.' ?></span></div>
                             </div>
                         </section>
 
-                        <section class="onboarding-essential-card">
-                            <div class="section-heading compact"><div><span class="eyebrow">Elegibilidade</span><h3>Existe limite de idade?</h3><p>Use 0 quando a empresa atende qualquer idade.</p></div></div>
-                            <div class="form-grid three">
-                                <label class="field"><span>Idade mínima</span><input type="number" name="minimum_age" min="0" max="130" value="<?= (int) ($agentLimits['minimum_age'] ?? 0) ?>"><small>0 = sem mínimo.</small></label>
-                                <label class="field"><span>Idade máxima</span><input type="number" name="maximum_age" min="0" max="130" value="<?= (int) ($agentLimits['maximum_age'] ?? 0) ?>"><small>0 = sem máximo.</small></label>
-                                <label class="field"><span>Se estiver fora da faixa</span><select name="age_action"><option value="block_schedule" <?= ($agentLimits['age_action'] ?? 'block_schedule') === 'block_schedule' ? 'selected' : '' ?>>Não permitir agenda</option><option value="handoff" <?= ($agentLimits['age_action'] ?? '') === 'handoff' ? 'selected' : '' ?>>Encaminhar para humano</option><option value="block" <?= ($agentLimits['age_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper automação</option></select></label>
+                        <section class="business-question-card">
+                            <div class="business-question-heading">
+                                <span class="business-question-number">4</span>
+                                <div><h3>Quando o assistente não pode decidir sozinho?</h3><p>Escolha situações comuns. A decisão configurada prevalece sobre qualquer resposta gerada pela IA.</p></div>
                             </div>
-                            <details class="onboarding-simple-details"><summary><span><strong>Personalizar respostas de idade</strong><small>Os textos recomendados já funcionam sem alteração.</small></span><em>Opcional</em></summary><div class="onboarding-simple-details-body form-grid two"><label class="field"><span>Abaixo da idade mínima</span><textarea name="minimum_age_message" rows="3"><?= View::e($agentLimits['minimum_age_message'] ?? '') ?></textarea><small>Pode usar <code>{{minimum_age}}</code>.</small></label><label class="field"><span>Acima da idade máxima</span><textarea name="maximum_age_message" rows="3" placeholder="Ex.: Atualmente os atendimentos são realizados até 60 anos."><?= View::e($agentLimits['maximum_age_message'] ?? '') ?></textarea></label></div></details>
+                            <div class="business-rule-grid">
+                                <label class="business-rule-card"><span><strong>Pedido de desconto</strong><small>O agente nunca inventa desconto.</small></span><select name="discount_policy"><option value="off" <?= empty($agentLimits['discount_rule_enabled']) ? 'selected' : '' ?>>Sem regra especial</option><option value="handoff" <?= !empty($agentLimits['discount_rule_enabled']) && ($agentLimits['discount_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="deny" <?= !empty($agentLimits['discount_rule_enabled']) && ($agentLimits['discount_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar que não pode conceder</option></select></label>
+                                <label class="business-rule-card"><span><strong>Encaixe ou exceção</strong><small>Evita prometer algo fora das regras.</small></span><select name="exception_policy"><option value="off" <?= empty($agentLimits['exception_rule_enabled']) ? 'selected' : '' ?>>Sem regra especial</option><option value="handoff" <?= !empty($agentLimits['exception_rule_enabled']) && ($agentLimits['exception_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="deny" <?= !empty($agentLimits['exception_rule_enabled']) && ($agentLimits['exception_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar que não abre exceção</option></select></label>
+                                <label class="business-rule-card"><span><strong>Reembolso / estorno</strong><small>Decisões financeiras ficam sob controle humano.</small></span><select name="refund_policy"><option value="off" <?= empty($agentLimits['refund_rule_enabled']) ? 'selected' : '' ?>>Sem regra especial</option><option value="handoff" <?= !empty($agentLimits['refund_rule_enabled']) && ($agentLimits['refund_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="deny" <?= !empty($agentLimits['refund_rule_enabled']) && ($agentLimits['refund_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar que não pode decidir</option></select></label>
+                            </div>
+
+                            <div class="business-age-rule">
+                                <div><strong>A empresa atende qualquer idade?</strong><small>Se houver faixa etária, o agente usa essa regra antes de oferecer agenda.</small></div>
+                                <div class="business-binary-choice compact"><label><input type="radio" name="age_restricted" value="0" <?= !$hasAgeRestriction ? 'checked' : '' ?>><span><strong>Sim</strong><small>Sem limite de idade.</small></span></label><label><input type="radio" name="age_restricted" value="1" <?= $hasAgeRestriction ? 'checked' : '' ?>><span><strong>Não</strong><small>Definir faixa atendida.</small></span></label></div>
+                            </div>
+                            <div class="form-grid three" data-business-age-fields <?= $hasAgeRestriction ? '' : 'hidden' ?>>
+                                <label class="field"><span>Idade mínima</span><input type="number" name="minimum_age" min="0" max="130" value="<?= $minimumAgeConfigured ?>"><small>0 = sem mínimo.</small></label>
+                                <label class="field"><span>Idade máxima</span><input type="number" name="maximum_age" min="0" max="130" value="<?= $maximumAgeConfigured ?>"><small>0 = sem máximo.</small></label>
+                                <label class="field"><span>Se estiver fora da faixa</span><select name="age_action"><option value="block_schedule" <?= ($agentLimits['age_action'] ?? 'block_schedule') === 'block_schedule' ? 'selected' : '' ?>>Não oferecer agenda</option><option value="handoff" <?= ($agentLimits['age_action'] ?? '') === 'handoff' ? 'selected' : '' ?>>Encaminhar para equipe</option><option value="block" <?= ($agentLimits['age_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper atendimento automático</option></select></label>
+                            </div>
+
+                            <details class="business-inline-optional">
+                                <summary>Outros casos especiais <small>opcional</small></summary>
+                                <div class="business-inline-optional-body">
+                                    <label class="checkbox-field"><span>Parar automação em situações urgentes/sensíveis</span><span class="checkbox-control"><input type="checkbox" name="emergency_rule_enabled" value="1" <?= !empty($agentLimits['emergency_rule_enabled']) ? 'checked' : '' ?>><span>Ativar</span></span></label>
+                                    <label class="field"><span>Casos ou serviços que exigem análise humana</span><textarea name="custom_case_terms" rows="4" placeholder="Um por linha. Ex.: convênio X, atendimento domiciliar"><?= View::e($agentLimits['custom_case_terms'] ?? '') ?></textarea><small>Se preencher, o RS Connect cria uma regra estruturada para cada linha.</small></label>
+                                    <input type="hidden" name="custom_case_enabled" value="<?= trim((string) ($agentLimits['custom_case_terms'] ?? '')) !== '' || !empty($agentLimits['custom_case_enabled']) ? '1' : '0' ?>">
+                                    <input type="hidden" name="custom_case_action" value="handoff">
+                                    <input type="hidden" name="emergency_action" value="handoff">
+                                    <label class="field"><span>Resposta em caso urgente</span><textarea name="emergency_message" rows="3"><?= View::e($agentLimits['emergency_message'] ?? 'Essa situação precisa de atenção humana. Vou encaminhar sua mensagem para a equipe responsável.') ?></textarea></label>
+                                </div>
+                            </details>
                         </section>
 
-                        <details class="onboarding-simple-details">
-                            <summary><span><strong>Casos específicos da empresa</strong><small>Serviços não atendidos, convênios, atendimento domiciliar e outras exceções</small></span><em>Opcional</em></summary>
-                            <div class="onboarding-simple-details-body">
-                                <label class="checkbox-field"><span>Aplicar regra para casos personalizados</span><span class="checkbox-control"><input type="checkbox" name="custom_case_enabled" value="1" <?= !empty($agentLimits['custom_case_enabled']) ? 'checked' : '' ?>><span>Ativar</span></span></label>
-                                <div class="form-grid two"><label class="field"><span>Casos / serviços</span><textarea name="custom_case_terms" rows="5" placeholder="Um por linha"><?= View::e($agentLimits['custom_case_terms'] ?? '') ?></textarea><small>Ex.: terapia de casal, convênio X, atendimento domiciliar.</small></label><div><label class="field"><span>O que fazer</span><select name="custom_case_action"><option value="handoff" <?= ($agentLimits['custom_case_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para responsável</option><option value="warn" <?= ($agentLimits['custom_case_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Informar a regra e continuar</option><option value="block" <?= ($agentLimits['custom_case_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper automação</option></select></label><label class="field"><span>Resposta</span><textarea name="custom_case_message" rows="3"><?= View::e($agentLimits['custom_case_message'] ?? '') ?></textarea></label></div></div>
-                            </div>
+                        <details class="business-advanced-linkbox">
+                            <summary>Precisa de uma configuração fora do padrão?</summary>
+                            <div><p>As opções técnicas continuam disponíveis para implantação e suporte, mas não são necessárias para a operação inicial.</p><div class="onboarding-final-links"><a href="<?= View::e(Router::url('/agents')) ?>">Configuração avançada do assistente</a><a href="<?= View::e(Router::url('/calendar')) ?>">Agenda avançada</a></div></div>
                         </details>
 
-                        <details class="onboarding-simple-details">
-                            <summary><span><strong>Situações urgentes / sensíveis</strong><small>Defina se o fluxo automático deve parar e ir para atendimento humano</small></span><em>Opcional</em></summary>
-                            <div class="onboarding-simple-details-body">
-                                <label class="checkbox-field"><span>Aplicar protocolo de situação urgente</span><span class="checkbox-control"><input type="checkbox" name="emergency_rule_enabled" value="1" <?= !empty($agentLimits['emergency_rule_enabled']) ? 'checked' : '' ?>><span>Ativar</span></span></label>
-                                <div class="form-grid two"><label class="field"><span>O que fazer</span><select name="emergency_action"><option value="handoff" <?= ($agentLimits['emergency_action'] ?? 'handoff') === 'handoff' ? 'selected' : '' ?>>Encaminhar para atendimento humano</option><option value="block" <?= ($agentLimits['emergency_action'] ?? '') === 'block' ? 'selected' : '' ?>>Interromper automação</option><option value="warn" <?= ($agentLimits['emergency_action'] ?? '') === 'warn' ? 'selected' : '' ?>>Enviar orientação e continuar</option></select></label><label class="field"><span>Resposta aprovada</span><textarea name="emergency_message" rows="4"><?= View::e($agentLimits['emergency_message'] ?? '') ?></textarea></label></div>
-                            </div>
-                        </details>
-
-                        <div class="message-info"><strong>Regra global de segurança</strong><span>O assistente não recebe autorização para inventar desconto, reembolso, exceção ou elegibilidade. Quando uma regra acima é acionada, a decisão estruturada prevalece sobre o texto gerado pela IA.</span></div>
-                        <div class="form-actions"><button class="btn btn-primary" type="submit">Continuar</button></div>
+                        <div class="business-save-bar">
+                            <div><strong>O RS Connect valida antes de publicar.</strong><span>Se alguma regra estiver incompleta ou contraditória, nada é aplicado pela metade.</span></div>
+                            <button class="btn btn-primary" type="submit">Salvar e verificar</button>
+                        </div>
                     </form>
                 <?php elseif ($step['key'] === 'final_test'): ?>
                     <div class="onboarding-action-grid">
@@ -653,6 +585,62 @@ foreach ($activationPhases as $phaseIndex => $phase) {
             };
             toggle.addEventListener('change', sync);
             sync();
+        })();
+
+        (function () {
+            const root = document.querySelector('[data-business-operation]');
+            if (!root) return;
+            const calendarFields = root.querySelector('[data-business-calendar-fields]');
+            const ageFields = root.querySelector('[data-business-age-fields]');
+            const consequence = root.querySelector('[data-calendar-consequence]');
+
+            const syncCalendar = () => {
+                const enabled = root.querySelector('input[name="calendar_enabled"]:checked')?.value === '1';
+                if (calendarFields) calendarFields.hidden = !enabled;
+                root.querySelectorAll('input[name="calendar_enabled"]').forEach((input) => {
+                    input.closest('label')?.classList.toggle('is-selected', input.checked);
+                });
+                syncConsequence();
+            };
+            const syncAge = () => {
+                const restricted = root.querySelector('input[name="age_restricted"]:checked')?.value === '1';
+                if (ageFields) ageFields.hidden = !restricted;
+                root.querySelectorAll('input[name="age_restricted"]').forEach((input) => {
+                    input.closest('label')?.classList.toggle('is-selected', input.checked);
+                });
+            };
+            const syncConsequence = () => {
+                if (!consequence) return;
+                const enabled = root.querySelector('input[name="calendar_enabled"]:checked')?.value === '1';
+                const human = root.querySelector('input[name="approval_mode"]:checked')?.value !== 'automatic';
+                if (!enabled) {
+                    consequence.textContent = 'O assistente não consulta nem oferece horários enquanto a agenda estiver desativada.';
+                } else if (human) {
+                    consequence.textContent = 'O agente consulta a disponibilidade, segura a vaga e aguarda sua equipe confirmar.';
+                } else {
+                    consequence.textContent = 'O agente consulta a disponibilidade e confirma o horário quando todas as regras estiverem atendidas.';
+                }
+            };
+            const syncChecks = () => {
+                root.querySelectorAll('.business-check-card input[type="checkbox"]').forEach((input) => {
+                    input.closest('.business-check-card')?.classList.toggle('is-selected', input.checked);
+                });
+            };
+            const syncApproval = () => {
+                root.querySelectorAll('input[name="approval_mode"]').forEach((input) => {
+                    input.closest('label')?.classList.toggle('is-selected', input.checked);
+                });
+                syncConsequence();
+            };
+
+            root.querySelectorAll('input[name="calendar_enabled"]').forEach((input) => input.addEventListener('change', syncCalendar));
+            root.querySelectorAll('input[name="age_restricted"]').forEach((input) => input.addEventListener('change', syncAge));
+            root.querySelectorAll('input[name="approval_mode"]').forEach((input) => input.addEventListener('change', syncApproval));
+            root.querySelectorAll('.business-check-card input[type="checkbox"]').forEach((input) => input.addEventListener('change', syncChecks));
+            syncCalendar();
+            syncAge();
+            syncApproval();
+            syncChecks();
         })();
         </script>
 

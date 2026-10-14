@@ -28,10 +28,10 @@ $assert(str_contains($availability, "'use_n8n' => 0"), 'Agenda interna deve desl
 $assert(str_contains($availability, "'create_google_event_on_confirm' => 0"), 'Agenda interna não deve criar evento no Google.');
 $assert(str_contains($availability, "'by_day' => \$byDay"), 'Agenda interna deve armazenar horários por dia.');
 $assert(str_contains($availability, 'Horários disponíveis gerados pela Agenda interna do RS Connect.'), 'Resposta interna não deve mencionar falha do n8n.');
-$assert(str_contains($view, 'Agenda interna do RS Connect'), 'Onboarding deve mostrar Agenda interna.');
-$assert(str_contains($view, 'Agenda inteligente integrada'), 'Onboarding deve mostrar Agenda inteligente.');
-$assert(str_contains($view, 'Não utilizar agenda'), 'Onboarding deve permitir dispensar agenda.');
-$assert(str_contains($view, 'data-calendar-mode-panel="internal"'), 'Configuração interna deve ser exibida condicionalmente.');
+$assert(str_contains($view, 'O cliente pode agendar pelo WhatsApp?'), 'Onboarding deve perguntar agenda em linguagem de negócio.');
+$assert(str_contains($view, 'name="calendar_enabled"'), 'Onboarding deve permitir ativar ou dispensar agenda sem expor o modo técnico.');
+$assert(!str_contains($view, 'Agenda inteligente integrada'), 'Onboarding simplificado não deve expor integração técnica de agenda.');
+$assert(str_contains($view, 'Agenda avançada'), 'A configuração técnica continua disponível de forma secundária.');
 $assert(str_contains($company, 'Situação da Agenda inteligente'), 'Super Admin deve controlar a liberação na empresa.');
 $assert(str_contains($controller, 'saveSmartCalendarAccess'), 'A liberação deve ser salva pelo backend do Super Admin.');
 $assert(str_contains($appVersion, '061_onboarding_calendar_modes.sql'), 'Painel de versão deve exigir a migration 061.');

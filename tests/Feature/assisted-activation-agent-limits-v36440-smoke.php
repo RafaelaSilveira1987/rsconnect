@@ -101,8 +101,10 @@ $root = dirname(__DIR__, 2);
 $routes = (string) file_get_contents($root . '/routes/web.php');
 $view = (string) file_get_contents($root . '/app/Views/onboarding/index.php');
 $guide = (string) file_get_contents($root . '/app/Services/OnboardingGuideService.php');
-$checks['onboarding possui etapa limites e rota protegida'] = str_contains($routes, "'/onboarding/limits'")
-    && str_contains($view, "step['key'] === 'agent_limits'")
+$checks['onboarding mantém limites estruturados dentro da configuração simples'] = str_contains($routes, "'/onboarding/operation'")
+    && str_contains($view, 'Quando o assistente não pode decidir sozinho?')
+    && str_contains($view, 'name="discount_policy"')
+    && str_contains($guide, 'saveBusinessOperation')
     && str_contains($guide, "'agent_limits'");
 
 $failed = [];

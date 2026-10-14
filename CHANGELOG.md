@@ -1,3 +1,14 @@
+## 36.44.4 — Configuração de negócio simplificada
+
+- Une **Atendimento**, **Agenda** e **Limites** em uma única experiência de configuração orientada ao negócio dentro da Ativação Assistida.
+- Substitui conceitos técnicos por quatro perguntas claras: **o que perguntar**, **quando atender**, **se pode agendar** e **quando chamar a equipe**.
+- Permite selecionar os campos de triagem por checkbox, sem editar workflow, posição, action keys ou capabilities.
+- Simplifica agenda para duração, capacidade por horário, antecedência e confirmação humana/automática. A Agenda interna continua sendo preparada automaticamente no backend.
+- Simplifica desconto, reembolso, exceção e faixa etária em decisões comerciais legíveis; políticas estruturadas continuam sendo executadas antes da IA.
+- Adiciona `saveBusinessOperation()`, que grava triagem, workflow, capabilities, horário, agenda e políticas em **uma única transação**. Em erro, faz rollback integral.
+- Mantém configuração avançada como acesso secundário para implantação/suporte, sem competir com o fluxo principal.
+- Não adiciona migration. Permanece obrigatória `125_native_financial_lifecycle_notifications.sql`.
+
 ## 36.44.3 — Ativação Assistida refinada
 
 - Corrige o espaçamento da primeira etapa: o card de **Configuração recomendada** não estica mais a altura do bloco e **Ajustes opcionais** mantém o mesmo ritmo visual do restante do onboarding.

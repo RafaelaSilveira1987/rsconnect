@@ -1,5 +1,19 @@
+# RS Connect 36.44.4
+> **36.44.4** transforma a configuração do atendimento em uma tela de negócio: perguntas, horário, agenda, capacidade, aprovação e limites são definidos sem expor workflow, capabilities ou actions. O salvamento é transacional: se alguma regra falhar, nenhuma parte é publicada pela metade. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
+
+## Homologação rápida 36.44.4
+
+1. Abra **Ativação Assistida → Como atender**. A tela deve mostrar quatro perguntas simples: o que coletar, quando a equipe atende, se o cliente pode agendar e quando o assistente não pode decidir sozinho.
+2. Confirme que não aparecem termos como `calendar.pre_schedule`, workflow, action key ou Agenda inteligente integrada na tela principal.
+3. Marque/desmarque informações de triagem, configure capacidade e escolha confirmação humana/automática. Salve em **Salvar e verificar**.
+4. Reabra a tela e confirme que perguntas, capacidade, antecedência, aprovação e limites foram preservados.
+5. Desative a agenda e salve. O fluxo técnico de calendário deve ficar inativo sem apagar a configuração histórica.
+6. Simule erro de regra (por exemplo, idade máxima menor que mínima): o sistema deve rejeitar a operação inteira, sem aplicar somente parte da configuração.
+7. Execute `php tests/Feature/assisted-business-configuration-v36444-smoke.php`.
+
+---
+
 # RS Connect 36.44.3
-> **36.44.3** corrige a experiência inicial da Ativação Assistida: remove o espaçamento incoerente do cadastro, transforma SLA em uma opção explícita e permite preparar o assistente sem sair do onboarding para a tela avançada. Não há migration nova; permanece necessária `125_native_financial_lifecycle_notifications.sql`.
 
 ## Homologação rápida 36.44.3
 

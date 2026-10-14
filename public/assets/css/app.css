@@ -17982,3 +17982,179 @@ summary {
     min-width: 0;
   }
 }
+
+/* RS Connect 36.44.4 — configuração do atendimento em linguagem de negócio */
+.onboarding-business-operation { display: grid; gap: 18px; }
+.business-operation-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.business-operation-overview > div {
+  display: grid;
+  gap: 4px;
+  padding: 15px 16px;
+  border: 1px solid var(--rs-border);
+  border-radius: 15px;
+  background: #f8fbfd;
+}
+.business-operation-overview span { color: var(--rs-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.business-operation-overview strong { font-size: .98rem; }
+.business-operation-overview small { color: var(--rs-muted); line-height: 1.4; }
+
+.business-question-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--rs-border);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(17,32,59,.035);
+}
+.business-question-heading { display: flex; gap: 14px; align-items: flex-start; }
+.business-question-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--rs-teal), var(--rs-blue));
+  font-weight: 900;
+}
+.business-question-heading h3 { margin: 1px 0 5px; font-size: 1.05rem; }
+.business-question-heading p { margin: 0; color: var(--rs-muted); line-height: 1.55; }
+
+.business-check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.business-check-card {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 13px 14px;
+  border: 1px solid #dce5ec;
+  border-radius: 14px;
+  background: #fbfcfe;
+  cursor: pointer;
+  transition: .16s ease;
+}
+.business-check-card:hover { border-color: rgba(2,148,142,.42); background: #f7fbfb; }
+.business-check-card.is-selected { border-color: rgba(2,148,142,.5); background: rgba(2,148,142,.055); box-shadow: inset 3px 0 0 var(--rs-teal); }
+.business-check-card input { margin-top: 3px; accent-color: var(--rs-teal); }
+.business-check-card > span { display: grid; gap: 4px; }
+.business-check-card strong { font-size: .88rem; }
+.business-check-card small { color: var(--rs-muted); line-height: 1.38; }
+
+.business-consequence {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f2f8fa;
+  color: #38536a;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+.business-consequence strong { color: var(--rs-text); }
+
+.business-day-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.business-day-grid label { cursor: pointer; }
+.business-day-grid input { position: absolute; opacity: 0; pointer-events: none; }
+.business-day-grid span {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 1px solid #dce5ec;
+  border-radius: 12px;
+  background: #fff;
+  font-size: .8rem;
+  font-weight: 800;
+  transition: .16s ease;
+}
+.business-day-grid input:checked + span { color: #0f6e68; border-color: rgba(2,148,142,.45); background: rgba(2,148,142,.08); }
+
+.business-inline-optional { border: 1px dashed #d8e2ea; border-radius: 14px; background: #fbfcfe; overflow: hidden; }
+.business-inline-optional > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 15px; cursor: pointer; font-weight: 800; list-style: none; }
+.business-inline-optional > summary::-webkit-details-marker { display: none; }
+.business-inline-optional > summary small { color: var(--rs-muted); font-weight: 700; }
+.business-inline-optional-body { display: grid; gap: 12px; padding: 2px 15px 15px; border-top: 1px solid #edf1f4; }
+.business-inline-optional-body > :first-child { margin-top: 14px; }
+.business-toggle-row > label { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
+.business-toggle-row input { accent-color: var(--rs-teal); }
+.business-toggle-row label > span { display: grid; gap: 2px; }
+.business-toggle-row small { color: var(--rs-muted); }
+
+.business-binary-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.business-binary-choice label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid #dce5ec;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: .16s ease;
+}
+.business-binary-choice label.is-selected,
+.business-binary-choice label:has(input:checked) { border-color: rgba(2,148,142,.5); background: rgba(2,148,142,.055); box-shadow: inset 3px 0 0 var(--rs-teal); }
+.business-binary-choice input { margin-top: 3px; accent-color: var(--rs-teal); }
+.business-binary-choice label > span { display: grid; gap: 4px; }
+.business-binary-choice small { color: var(--rs-muted); line-height: 1.4; }
+.business-binary-choice.compact label { padding: 11px 12px; }
+.business-calendar-fields { display: grid; gap: 14px; }
+.business-decision-block { display: grid; gap: 9px; }
+.business-decision-block > span { color: #4a5568; font-size: .8rem; font-weight: 800; }
+
+.business-rule-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.business-rule-card { display: grid; gap: 11px; padding: 14px; border: 1px solid #dce5ec; border-radius: 14px; background: #fbfcfe; }
+.business-rule-card > span { display: grid; gap: 4px; }
+.business-rule-card small { color: var(--rs-muted); line-height: 1.4; }
+.business-rule-card select { width: 100%; padding: 10px 11px; border: 1px solid #dbe2ec; border-radius: 10px; background: #fff; color: var(--rs-text); }
+.business-age-rule { display: grid; grid-template-columns: minmax(0, .8fr) minmax(320px, 1.2fr); gap: 16px; align-items: center; padding-top: 4px; }
+.business-age-rule > div:first-child { display: grid; gap: 4px; }
+.business-age-rule small { color: var(--rs-muted); line-height: 1.4; }
+
+.business-advanced-linkbox { border: 1px dashed #d7e0e7; border-radius: 14px; background: #fafcfd; }
+.business-advanced-linkbox > summary { padding: 13px 15px; cursor: pointer; font-weight: 800; }
+.business-advanced-linkbox > div { padding: 0 15px 15px; color: var(--rs-muted); }
+.business-advanced-linkbox p { margin: 0 0 10px; }
+.business-save-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(20,100,152,.16);
+  border-radius: 16px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 12px 30px rgba(17,32,59,.12);
+  backdrop-filter: blur(10px);
+}
+.business-save-bar > div { display: grid; gap: 3px; }
+.business-save-bar span { color: var(--rs-muted); font-size: .8rem; }
+
+@media (max-width: 1050px) {
+  .business-operation-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .business-rule-grid { grid-template-columns: 1fr; }
+  .business-age-rule { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .business-operation-overview,
+  .business-check-grid,
+  .business-binary-choice { grid-template-columns: 1fr; }
+  .business-day-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .business-question-card { padding: 15px; }
+  .business-save-bar { position: static; align-items: stretch; flex-direction: column; }
+  .business-save-bar .btn { width: 100%; }
+}
+.onboarding-business-summary .business-summary-list { display: grid; gap: 8px; }
+.business-summary-list > div { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--rs-border); border-radius: 13px; background: #fbfcfe; }
+.business-summary-list > div > span { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border-radius: 9px; background: #edf2f6; color: var(--rs-muted); font-weight: 900; }
+.business-summary-list > div.is-ready > span { background: rgba(2,148,142,.1); color: var(--rs-teal); }
+.business-summary-list p { display: grid; gap: 2px; margin: 0; min-width: 0; }
+.business-summary-list strong { font-size: .84rem; }
+.business-summary-list small { color: var(--rs-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

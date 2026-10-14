@@ -21,7 +21,7 @@ $checks['cadastro não estica o preview recomendado e mantém ajustes opcionais 
 $checks['SLA é opt-in e possui marcação explícita para ativar ou desativar'] =
     str_contains($view, 'name="sla_enabled" value="0"')
     && str_contains($view, 'name="sla_enabled" value="1" data-sla-enabled')
-    && str_contains($view, 'Medir SLA')
+    && str_contains($view, 'Medir tempo da primeira resposta humana')
     && str_contains($view, 'data-sla-fields')
     && str_contains($view, "fields.hidden = !toggle.checked")
     && str_contains($view, "!empty(\$slaSettings['updated_at']) ? !empty(\$slaSettings['enabled']) : false");
@@ -49,11 +49,11 @@ $checks['definição da etapa não orienta mais escrever prompt ou abrir Assiste
     && str_contains($guide, "'action_url' => '/onboarding?step=ai_agent'")
     && str_contains($guide, 'As regras e o fluxo já vêm das etapas anteriores.');
 
-$checks['release 36.44.3 preserva migration atual e renova cache CSS'] =
-    ($manifest['package_version'] ?? '') === '36.44.3'
+$checks['release 36.44.4 preserva migration atual e renova cache CSS'] =
+    ($manifest['package_version'] ?? '') === '36.44.4'
     && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql'
-    && str_contains($version, 'RS Connect 36.44.3 — Ativação Assistida refinada')
-    && str_contains($layout, '/assets/css/app.css?v=36.44.3');
+    && str_contains($version, 'RS Connect 36.44.4 — Configuração de negócio simplificada')
+    && str_contains($layout, '/assets/css/app.css?v=36.44.4');
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
 foreach ($checks as $label => $ok) {

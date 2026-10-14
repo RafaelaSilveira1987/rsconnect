@@ -472,6 +472,20 @@ final class OnboardingController
         $this->redirect('/onboarding#' . $stepKey);
     }
 
+    public function saveOperation(): void
+    {
+        $tenantId = (int) Auth::tenantId();
+        try {
+            (new OnboardingGuideService())->saveBusinessOperation($tenantId, $_POST, Auth::id());
+            Audit::log('onboarding.business_operation_saved', [], $tenantId);
+            Flash::set('success', 'Configuração do atendimento salva e validada. O RS Connect organizou perguntas, agenda e limites automaticamente.');
+        } catch (Throwable $exception) {
+            Flash::set('error', 'Não foi possível salvar a configuração do atendimento: ' . $exception->getMessage());
+            $this->redirect('/onboarding?step=attendance_rules#attendance_rules');
+        }
+        $this->redirect('/onboarding');
+    }
+
     public function saveAttendance(): void
     {
         $tenantId = (int) Auth::tenantId();

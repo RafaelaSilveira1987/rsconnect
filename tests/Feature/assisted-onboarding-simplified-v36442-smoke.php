@@ -21,7 +21,7 @@ $checks['onboarding virou Ativação Assistida com quatro blocos de negócio'] =
 
 $checks['interface mostra apenas uma tarefa por vez sem remover validações internas'] =
     str_contains($view, "if ((string) (\$step['key'] ?? '') !== \$activeStepKey) continue;")
-    && str_contains($view, 'O que já está pronto')
+    && str_contains($view, 'Visão rápida')
     && str_contains($view, 'Voltar para a próxima tarefa');
 
 $checks['cadastro pede segmento e oculta decisões técnicas em ajustes opcionais'] =
@@ -31,26 +31,27 @@ $checks['cadastro pede segmento e oculta decisões técnicas em ajustes opcionai
     && str_contains($view, 'Ajustes opcionais')
     && str_contains($view, 'Normalmente não é necessário alterar');
 
-$checks['atendimento mantém só horários como decisão principal e recolhe SLA e mensagens'] =
-    str_contains($view, 'Dias e horário de atendimento')
-    && str_contains($view, 'Ajustes avançados')
+$checks['atendimento usa perguntas de negócio e recolhe SLA e mensagens opcionais'] =
+    str_contains($view, 'O que o assistente precisa perguntar?')
+    && str_contains($view, 'Quando sua equipe atende?')
+    && str_contains($view, 'Mensagem fora do horário e SLA')
     && str_contains($view, 'sla_target_minutes')
     && str_contains($view, 'after_hours_message');
 
 $checks['agenda expressa pergunta capacidade e confirmação sem expor integração técnica'] =
-    str_contains($view, 'Mais de uma pessoa no mesmo horário')
-    && str_contains($view, 'name="booking_capacity_mode" value="capacity"')
-    && str_contains($view, 'name="default_slot_capacity"')
-    && str_contains($view, 'A equipe confirma')
-    && str_contains($view, 'Confirmar automaticamente')
+    str_contains($view, 'O cliente pode agendar pelo WhatsApp?')
+    && str_contains($view, 'name="slot_capacity"')
+    && str_contains($view, 'Quem confirma o horário?')
+    && str_contains($view, 'Minha equipe')
+    && str_contains($view, 'Automaticamente')
     && str_contains($calendarService, "'booking_capacity_mode' => \$this->normalizeCapacityMode")
     && str_contains($calendarService, "'default_slot_capacity' => max(1, min(100");
 
-$checks['limites mostram decisões simples e deixam respostas detalhadas sob demanda'] =
-    str_contains($view, 'O que o assistente não pode decidir sozinho?')
-    && str_contains($view, 'Personalizar resposta')
-    && str_contains($view, 'Existe limite de idade?')
-    && str_contains($view, 'Casos específicos da empresa');
+$checks['limites mostram decisões simples em linguagem de negócio'] =
+    str_contains($view, 'Quando o assistente não pode decidir sozinho?')
+    && str_contains($view, 'Pedido de desconto')
+    && str_contains($view, 'A empresa atende qualquer idade?')
+    && str_contains($view, 'Outros casos especiais');
 
 $checks['histórico e opções técnicas não disputam atenção com a tarefa atual'] =
     str_contains($view, 'onboarding-history-details')
@@ -60,10 +61,10 @@ $checks['histórico e opções técnicas não disputam atenção com a tarefa at
 $checks['navegação e título usam Ativação Assistida'] =
     str_contains($controller, "'title' => 'Ativação Assistida'")
     && str_contains($layout, '<span>Ativação Assistida</span>')
-    && str_contains($layout, '/assets/css/app.css?v=36.44.3');
+    && str_contains($layout, '/assets/css/app.css?v=36.44.4');
 
 $checks['release 36.44.2 não exige migration nova'] =
-    ($manifest['package_version'] ?? '') === '36.44.3'
+    ($manifest['package_version'] ?? '') === '36.44.4'
     && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql'
     && str_contains($version, 'RS Connect 36.44.2 — Ativação Assistida enxuta')
     && str_contains($version, "REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql'");

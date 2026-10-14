@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.44.3",
-  "release_name": "Ativação Assistida refinada",
+  "package_version": "36.44.4",
+  "release_name": "Configuração de negócio simplificada",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.44.2",
-      "release_name": "Ativação Assistida enxuta",
+      "package_version": "36.44.3",
+      "release_name": "Ativação Assistida refinada",
       "required_migration": "125_native_financial_lifecycle_notifications.sql"
     },
     "historical_releases": [

@@ -340,6 +340,7 @@ return static function (Router $router): void {
     $router->post('/onboarding/instance', [OnboardingController::class, 'saveInstance'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/agent', [OnboardingController::class, 'saveAgent'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/step', [OnboardingController::class, 'updateStep'], ['auth', 'permission:onboarding.manage', 'csrf']);
+    $router->post('/onboarding/operation', [OnboardingController::class, 'saveOperation'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/attendance', [OnboardingController::class, 'saveAttendance'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/agenda', [OnboardingController::class, 'saveAgenda'], ['auth', 'permission:onboarding.manage', 'csrf']);
     $router->post('/onboarding/limits', [OnboardingController::class, 'saveAgentLimits'], ['auth', 'permission:onboarding.manage', 'csrf']);

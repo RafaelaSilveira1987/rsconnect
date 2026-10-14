@@ -252,7 +252,8 @@ final class AppVersionService
     // RS Connect 36.44.1 — Cadastro orientado por segmento. Cadastro inicial definido pela própria empresa, com segmento obrigatório e blueprint aplicado no onboarding.
     // RS Connect 36.44.2 — Ativação Assistida enxuta: quatro blocos visuais, uma tarefa por vez e opções técnicas recolhidas.
     // RS Connect 36.44.3 — onboarding visual corrigido, SLA opt-in e assistente configurado no próprio fluxo.
-    public const PACKAGE_LABEL = 'RS Connect 36.44.3 — Ativação Assistida refinada';
+    // RS Connect 36.44.4 — configuração do atendimento em linguagem de negócio, com salvamento transacional de perguntas, agenda e limites.
+    public const PACKAGE_LABEL = 'RS Connect 36.44.4 — Configuração de negócio simplificada';
     public const REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql';
 
     private PDO $pdo;
