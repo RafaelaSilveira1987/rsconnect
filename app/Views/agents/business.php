@@ -13,6 +13,7 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
 ?>
 <div class="business-agent" id="businessAgent"
      data-save-url="<?= View::e(Router::url('/api/v1/agents/business-save')) ?>"
+     data-read-url="<?= View::e(Router::url('/api/v1/agents/business-config')) ?>"
      data-api-url="<?= View::e(Router::url('/api/v1/agents')) ?>"
      data-csrf="<?= View::e(Csrf::token()) ?>"
      data-can-manage="<?= !empty($setupCanManage) ? '1' : '0' ?>"
@@ -31,7 +32,7 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
       <p>Escolha as regras do seu negócio, confira o resultado e teste antes de colocar em prática.</p>
     </div>
     <div class="ba-top-actions">
-      <span id="baDirtyLabel" class="ba-saving-status" aria-live="polite">Tudo salvo</span>
+      <span id="baDirtyLabel" class="ba-saving-status" aria-live="polite">Verificando dados salvos</span>
       <button id="baSave" type="button" class="ba-button ba-primary" <?= empty($setupCanManage) ? 'disabled' : '' ?>>Salvar configurações</button>
     </div>
   </header>

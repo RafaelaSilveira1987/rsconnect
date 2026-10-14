@@ -73,6 +73,16 @@ final class AgentReadinessService
         $channelQuery->execute(['tid'=>$tenantId,'aid'=>$agentId]);
         $channels = $channelQuery->fetchAll(PDO::FETCH_ASSOC);
 
+        // Conexão do WhatsApp é distinta do vínculo com o atendente.
+        // Uma instância conectada não significa que a IA esteja recebendo mensagens.
+        $instanceQuery = $pdo->prepare(
+            'SELECT id,status,receive_messages,webhook_enabled,identity_status,
+                    authorized_phone,profile_phone
+             FROM evolution_instances WHERE tenant_id=:tid ORDER BY is_default DESC,id'
+        );
+        $instanceQuery->execute(['tid'=>$tenantId]);
+        $instances = $instanceQuery->fetchAll(PDO::FETCH_ASSOC);
+
         $credentialQuery = $pdo->prepare(
             'SELECT id FROM ai_provider_credentials
              WHERE tenant_id=:tid AND status="active" AND (agent_id=:aid OR agent_id IS NULL)
@@ -126,7 +136,7 @@ final class AgentReadinessService
             'pre_schedule_settings'=>$preScheduleQuery->fetch(PDO::FETCH_ASSOC) ?: [],
             'calendar_availability_settings'=>$availabilityQuery->fetch(PDO::FETCH_ASSOC) ?: [],
             'agent'=>$agent, 'profile'=>$profile,
-            'channels'=>$channels,
+            'channels'=>$channels, 'whatsapp_instances'=>$instances,
             'credentials'=>$credentials,
             'capabilities'=>$capabilities,
             'triage_fields'=>$fields,

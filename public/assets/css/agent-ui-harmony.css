@@ -1,0 +1,50 @@
+/* RS Connect | Sistema visual compartilhado das telas de configuração do atendimento.
+   Escopo limitado: não altera calendários, chats reais ou outras páginas legadas. */
+.business-agent,.rex {
+  --rs-agent-primary:#2068b9;
+  --rs-agent-ink:#17243b;
+  --rs-agent-muted:#65758a;
+  --rs-agent-border:#e0e8f1;
+  --rs-agent-background:#fff;
+  color:var(--rs-agent-ink);
+  font-family:inherit;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.business-agent .ba-card,.rex .rex-panel {
+  background:var(--rs-agent-background);
+  border:1px solid var(--rs-agent-border);
+  border-radius:17px;
+  box-shadow:0 5px 24px rgba(31,54,80,.055);
+}
+.business-agent .ba-card-head,.rex .rex-panel-head {
+  border-bottom:1px solid var(--rs-agent-border);
+}
+.business-agent .ba-input,.rex .rex-input {
+  border:1px solid #cfdbe8;
+  border-radius:10px;
+  background-color:#fff;
+  min-height:42px;
+}
+.business-agent .ba-input:focus-visible,.rex .rex-input:focus-visible {
+  outline:3px solid rgba(32,104,185,.17);
+  outline-offset:1px;
+  border-color:#3b83c3;
+}
+.business-agent .ba-primary,.rex .rex-button-primary {
+  background:var(--rs-agent-primary);
+  border-color:var(--rs-agent-primary);
+  color:#fff;
+}
+.business-agent .ba-switch-row,.rex .rex-switch-row {
+  background:#fff;
+  border-color:var(--rs-agent-border);
+}
+.business-agent .ba-switch-row:hover,.rex .rex-switch-row:hover {border-color:#c0d3e6}
+.business-agent .ba-muted,.rex .rex-help {color:var(--rs-agent-muted)}
+.business-agent .ba-field,.rex .rex-form-field {font-size:13px}
+.business-agent .ba-card-head p,.rex .rex-panel-head p {color:var(--rs-agent-muted)}
+@media(max-width:620px) {
+  .business-agent .ba-card,.rex .rex-panel {border-radius:13px}
+  .business-agent .ba-topbar,.rex .rex-heading {gap:14px}
+}

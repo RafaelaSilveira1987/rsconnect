@@ -7,6 +7,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
 ?>
 <div class="rex" id="agentExpress" data-csrf="<?= View::e(Csrf::token()) ?>"
      data-save-url="<?= View::e(Router::url('/api/agents/express')) ?>"
+     data-read-url="<?= View::e(Router::url('/api/v1/agents/business-config')) ?>"
      data-api-root="<?= View::e(Router::url('/api/v1/agents')) ?>"
      data-can-view="<?= !empty($setupCanView) ? '1' : '0' ?>"
      data-can-fix="<?= !empty($setupCanManage) ? '1' : '0' ?>"

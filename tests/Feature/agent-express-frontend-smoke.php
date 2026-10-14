@@ -15,6 +15,7 @@ function ensure(bool $ok, string $label): void
 $root = dirname(__DIR__, 2);
 $routes = file_get_contents($root . '/routes/web.php');
 $controller = file_get_contents($root . '/app/Controllers/ExpressSetupController.php');
+$reader = file_get_contents($root . '/app/Services/ExpressBusinessConfigurationReader.php');
 $view = file_get_contents($root . '/app/Views/agent_express/index.php');
 $js = file_get_contents($root . '/public/assets/js/agent-express.js');
 $css = file_get_contents($root . '/public/assets/css/agent-express.css');
@@ -22,8 +23,8 @@ $layout = file_get_contents($root . '/app/Views/layouts/app.php');
 
 ensure(str_contains($routes, "'/onboarding/express'") && str_contains($routes, "'permission:onboarding.manage'"), 'Rota Expressa deve exigir permissionamento de onboarding.');
 ensure(str_contains($routes, "'/api/agents/express'") && str_contains($routes, "'permission:onboarding.manage', 'csrf'"), 'Gravação Expressa deve exigir permissão e CSRF.');
-ensure(str_contains($controller, 'Auth::tenantId()') && str_contains($controller, 'WHERE tenant_id=:tenant'), 'Prefill precisa ser isolado por tenant.');
-ensure(str_contains($controller, "PublicId::encode('agent'") && !str_contains($controller, 'beginTransaction('), 'GET não altera banco e entrega UUID público.');
+ensure(str_contains($controller, 'Auth::tenantId()') && str_contains($reader, 'WHERE tenant_id=:tenant'), 'Prefill deve ser isolado por empresa no serviço de leitura.');
+ensure(str_contains($reader, "PublicId::encode('agent'") && !str_contains($reader, 'beginTransaction('), 'GET apenas consulta o banco e entrega UUID público.');
 ensure(str_contains($view, 'rexWizard') && str_contains($view, 'rexReadiness') && str_contains($view, 'rexAgentSelect'), 'Wizard e painel devem compartilhar a página.');
 ensure(str_contains($view, 'JSON_HEX_TAG') && str_contains($view, 'Csrf::token()'), 'Pré-carregamento deve escapar HTML e conter CSRF.');
 ensure(str_contains($js, 'class AgentWizard') && str_contains($js, 'class ReadinessDashboard'), 'Componentes JS ausentes.');

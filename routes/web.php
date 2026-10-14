@@ -67,6 +67,7 @@ return static function (Router $router): void {
     $router->post('/api/agents/express', [ExpressOnboardingController::class, 'apply'], ['auth', 'permission:onboarding.manage', 'csrf']);
     // Painel de negócios: mesma validação e mesmo serviço, com permissão de agentes.
     $router->post('/api/v1/agents/business-save', [ExpressOnboardingController::class, 'apply'], ['auth', 'permission:agents.manage', 'csrf']);
+    $router->get('/api/v1/agents/business-config', [ExpressSetupController::class, 'savedConfiguration'], ['auth']); // autorização por agents.view/manage ou onboarding.manage no controller
 
     // Phase 2: UUID público na URL; tenant resolvido exclusivamente pela sessão.
     $router->post('/api/v1/agents/{id}/simulate', [AgentBusinessSimulationController::class, 'simulate'], ['auth', 'permission:agents.manage', 'csrf']);

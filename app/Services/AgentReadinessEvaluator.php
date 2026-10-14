@@ -54,9 +54,21 @@ final class AgentReadinessEvaluator
             && ($ch['identity_status'] ?? '') !== 'mismatch'
         ));
         $phone = trim((string) ($connected[0]['authorized_phone'] ?? $connected[0]['profile_phone'] ?? ''));
+        $instances = is_array($snapshot['whatsapp_instances'] ?? null) ? $snapshot['whatsapp_instances'] : [];
+        $physical = array_values(array_filter($instances, static fn ($i) =>
+            is_array($i) && ($i['status'] ?? '') === 'connected' && ($i['identity_status'] ?? '') !== 'mismatch'
+        ));
+        // Snapshots legados podem não incluir a lista separada de instâncias.
+        if (!$physical && $connected && $instances === []) $physical = $connected;
+        $physicalPhone = trim((string) ($physical[0]['authorized_phone'] ?? $physical[0]['profile_phone'] ?? ''));
+        $channelMessage = $connected
+            ? 'Canal vinculado ao assistente, com recepção e webhook habilitados' . ($phone !== '' ? ' (' . $phone . ').' : '.')
+            : ($physical
+                ? 'O WhatsApp está conectado à empresa' . ($physicalPhone !== '' ? ' (' . $physicalPhone . ')' : '')
+                    . ', mas este assistente não possui vínculo operacional ativo com recebimento e webhook habilitados.'
+                : 'Nenhum WhatsApp conectado foi identificado nesta empresa. Confira o estado atual em Canais.');
         $add('channel_integration', 'Conexão com WhatsApp', $connected ? 'ok' : 'error', 'critical',
-            $connected ? 'Canal conectado e apto a receber mensagens segundo o estado salvo' . ($phone !== '' ? ' (' . $phone . ').' : '.')
-                       : 'Associe um canal ativo, conectado, com webhook e recepção habilitados ao agente.', 18);
+            $channelMessage, 18);
 
         $hasCredential = !empty($snapshot['credentials']);
         $add('channel_integration', 'Credencial de IA', $hasCredential ? 'ok' : 'error', 'critical',
@@ -155,7 +167,12 @@ final class AgentReadinessEvaluator
         $status = !$canOperate ? 'CONFIGURING' : ($active ? 'ACTIVE' : 'READY_TO_OPERATE');
         foreach ($checks as &$check) unset($check['weight']);
         unset($check);
-        return ['status' => $status, 'readiness_score' => $score, 'can_operate' => $canOperate, 'checklist' => $checks];
+        return [
+            'status'=>$status, 'readiness_score'=>$score, 'can_operate'=>$canOperate,
+            'checklist'=>$checks,
+            'channel_status'=>[ 'connected'=>(bool) $physical, 'ready_for_agent'=>(bool) $connected,
+                'message'=>$channelMessage ],
+        ];
     }
 
     /** @param list<array<string,mixed>> $policies

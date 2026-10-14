@@ -476,6 +476,21 @@
           answer: pair.answer.trim().replace(/\s+/g, ' '),
         }));
         await jsonRequest(root.dataset.saveUrl, 'POST', this.data);
+        const verified = await jsonRequest(root.dataset.readUrl);
+        if (!verified.has_saved || !verified.payload) {
+          throw new Error('A gravação não pôde ser conferida. Seus campos continuam na tela para revisão.');
+        }
+        const expected = this.data, actual = verified.payload;
+        const comparable = value => JSON.stringify({
+          name:value.business_info.agent_name,
+          segment:value.business_info.segment,
+          tone:value.business_info.tone_of_voice,
+          questions:value.triage_config.custom_questions.map(v => v.trim().replace(/\s+/g,' ')),
+          faq:value.knowledge_base.faq.map(v => ({question:v.question.trim().replace(/\s+/g,' '),answer:v.answer.trim().replace(/\s+/g,' ')})),
+        });
+        if (comparable(expected) !== comparable(actual)) {
+          throw new Error('Os dados enviados não coincidem com os recuperados. Perguntas e respostas permanecem no formulário para conferir com o suporte.');
+        }
         this.dirty = false;
         this.hasSaved = true;
         this.busy = false;
@@ -506,5 +521,13 @@
   let data;
   try { data = JSON.parse($('#rexData').textContent); }
   catch { root.replaceChildren(el('p', 'rex-notice', 'Não foi possível abrir a configuração. Recarregue a página.')); return; }
+  if (!Array.isArray(data.payload?.routing_and_schedule?.business_hours)) {
+    const savedHours = data.payload?.routing_and_schedule?.business_hours || {};
+    const codes = {mon:'monday',tue:'tuesday',wed:'wednesday',thu:'thursday',fri:'friday',sat:'saturday',sun:'sunday'};
+    data.payload.routing_and_schedule.business_hours = Object.entries(codes).flatMap(([short, day]) =>
+      (Array.isArray(savedHours[short]) ? savedHours[short] : [])
+        .filter(p => Array.isArray(p) && p.length === 2)
+        .map(p => ({day,start:p[0],end:p[1]})));
+  }
   new AgentWizard(data);
 })();

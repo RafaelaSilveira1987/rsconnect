@@ -27,6 +27,14 @@
   catch { root.textContent = 'Não foi possível abrir suas configurações. Atualize a página.'; return; }
 
   const data = initial.payload;
+  if (!Array.isArray(data.routing_and_schedule?.business_hours)) {
+    // Protege clientes com HTML antigo em cache; nunca inventa horários.
+    const hours = data.routing_and_schedule?.business_hours || {};
+    const weekdays = {mon:'monday',tue:'tuesday',wed:'wednesday',thu:'thursday',fri:'friday',sat:'saturday',sun:'sunday'};
+    data.routing_and_schedule.business_hours = Object.entries(weekdays).flatMap(([short, day]) =>
+      (Array.isArray(hours[short]) ? hours[short] : []).filter(p => Array.isArray(p) && p.length === 2)
+        .map(p => ({day,start:p[0],end:p[1]})));
+  }
   const agent = initial.primary_agent || null;
   const canManage = root.dataset.canManage === '1';
   const canView = root.dataset.canView === '1';
@@ -41,6 +49,7 @@
   let state = {};
   let readiness = null;
   let lastSaved = clone(data);
+  let editGeneration = 0;
 
   function endpoint(action) { return `${root.dataset.apiUrl}/${encodeId(selectedAgent)}/${action}`; }
   async function request(url, method = 'GET', payload = undefined) {
@@ -69,6 +78,7 @@
   }
   function clearNotice() { $('#baNotice').hidden = true; }
   function markDirty() {
+    editGeneration += 1;
     dirty = true;
     $('#baDirtyLabel').textContent = 'Mudanças não salvas';
     $('#baDirtyLabel').classList.add('is-dirty');
@@ -274,6 +284,34 @@
     if (d.knowledge_base.faq.length > 40 || d.knowledge_base.faq.some(f => !f.question?.trim() || !f.answer?.trim() || f.question.length > 250 || f.answer.length > 1500)) return ['faq','Preencha todas as perguntas e respostas (até 40).'];
     return null;
   }
+  // Comparação de leitura após gravação: só informar sucesso quando a fonte
+  // operacional concordar com os valores enviados. Dias podem voltar ordenados.
+  function canonicalPayload(value) {
+    const result = clone(value);
+    result.routing_and_schedule.business_hours = (result.routing_and_schedule.business_hours || [])
+      .map(h => ({day:h.day,start:h.start,end:h.end}))
+      .sort((a,b) => a.day.localeCompare(b.day) || a.start.localeCompare(b.start));
+    result.commercial_info.payment_methods = [...(result.commercial_info.payment_methods || [])].sort();
+    result.triage_config.custom_questions = (result.triage_config.custom_questions || [])
+      .map(q => q.trim().replace(/\s+/g,' '));
+    result.knowledge_base.faq = (result.knowledge_base.faq || []).map(pair => ({
+      question: pair.question.trim().replace(/\s+/g,' '),
+      answer: pair.answer.trim().replace(/\s+/g,' '),
+    }));
+    result.routing_and_schedule.default_meeting_link ||= null;
+    if (result.commercial_info.pricing_strategy !== 'fixed_price') result.commercial_info.price_value = null;
+    return result;
+  }
+  function mismatchAreas(expected, persisted) {
+    const labels = {
+      business_info:'identidade', commercial_info:'valores e pagamentos',
+      triage_config:'informações e perguntas', routing_and_schedule:'horários de atendimento',
+      knowledge_base:'dúvidas frequentes', capabilities:'permissões do atendimento',
+    };
+    const a = canonicalPayload(expected), b = canonicalPayload(persisted);
+    return Object.keys(labels).filter(key => JSON.stringify(a[key]) !== JSON.stringify(b[key]))
+      .map(key => labels[key]);
+  }
   async function save() {
     if (!canManage || saving) return;
     if (!dirty && hasSaved) { notice('Não há alterações pendentes.', 'success'); return; }
@@ -282,18 +320,26 @@
     if (hasSaved && !window.confirm('Salvar substituirá as perguntas, respostas e regras anteriores da empresa pelos valores desta tela. Outras configurações avançadas podem ser afetadas. Deseja continuar?')) return;
     saving = true; updateChatAvailability();
     $('#baSave').disabled = true; $('#baSave').textContent = 'Salvando…'; clearNotice();
-    const snapshot = clone(data);
-    if (snapshot.commercial_info.pricing_strategy !== 'fixed_price') snapshot.commercial_info.price_value = null;
-    if (!snapshot.routing_and_schedule.default_meeting_link) snapshot.routing_and_schedule.default_meeting_link = null;
-    snapshot.triage_config.custom_questions = snapshot.triage_config.custom_questions.map(s => s.trim().replace(/\s+/g,' '));
-    snapshot.knowledge_base.faq = snapshot.knowledge_base.faq.map(pair => ({question: pair.question.trim().replace(/\s+/g,' '),answer: pair.answer.trim().replace(/\s+/g,' ')}));
+    const revision = editGeneration;
+    const snapshot = canonicalPayload(data);
     try {
       await request(root.dataset.saveUrl, 'POST', snapshot);
-      Object.assign(data, snapshot); hasSaved = true;
-      $('[data-bind="business_info.segment"]').disabled = true;
-      markSaved();
-      resetChat();
-      notice('Configurações salvas. O teste agora usará a versão atualizada.', 'success');
+      const verified = await request(root.dataset.readUrl);
+      if (!verified.has_saved || !verified.payload) throw new Error('A configuração não foi localizada após salvar. Não atualize novamente antes de conferir os dados.');
+      const differences = mismatchAreas(snapshot, verified.payload);
+      if (differences.length) {
+        notice('O sistema gravou a operação, mas a conferência encontrou divergências em: ' + differences.join(', ') + '. Nenhuma alteração foi descartada nesta tela. Consulte o suporte antes de salvar de novo.');
+        return;
+      }
+      if (editGeneration !== revision) {
+        // Se houve digitação durante a requisição, não sobrescrever o trabalho novo.
+        hasSaved = true;
+        notice('A versão enviada foi salva e conferida, mas há alterações mais recentes nesta tela. Salve novamente quando terminar.', 'success');
+        return;
+      }
+      Object.assign(data, verified.payload); hasSaved = true;
+      populate(); markSaved(); resetChat();
+      notice('Configurações gravadas e conferidas. Perguntas e respostas foram preservadas.', 'success');
       await refreshReadiness();
     } catch (err) {
       if (err.errors) {
@@ -318,14 +364,14 @@
   };
   function friendlyCheck(item) {
     const label = item.category === 'channel_integration' && /credencial/i.test(item.item || '')
-      ? ['Conexão do atendimento', 'É necessário concluir a conexão do serviço de atendimento.']
+      ? ['Serviço de respostas', 'A conexão do serviço de respostas precisa ser configurada pela administração da plataforma.']
       : checkLabels[item.category];
     let title = label ? label[0] : (item.item || 'Verificação');
     let message = item.message || '';
     if (item.category === 'channel_integration' && /WhatsApp/i.test(item.item || '')) {
       title = 'WhatsApp';
-      message = item.status === 'ok' ? 'Canal conectado e preparado para receber mensagens.'
-        : 'Conecte o WhatsApp e habilite o recebimento de mensagens.';
+      message = item.message || (item.status === 'ok' ? 'Canal conectado e preparado para receber mensagens.'
+        : 'Verifique a conexão e o vínculo do WhatsApp com este atendimento.');
     } else if (label && item.status === 'ok') {
       message = 'Configurado e conferido.';
     } else if (label && item.status !== 'ok') {
@@ -363,15 +409,18 @@
     $('#baReadyTitle').textContent = ok ? 'Tudo pronto para revisão final' : 'Ainda há ajustes necessários';
     $('#baReadyDetail').textContent = dirty ? 'As alterações recentes ainda não foram salvas.' : ok ? 'Nenhuma falha crítica encontrada.' : 'Resolva os pontos críticos antes de ativar o atendimento.';
   }
-  function updateChannel(checklist) {
-    const channel = checklist.find(c => c.category === 'channel_integration');
+  function updateChannel(checklist, details = null) {
+    const channel = checklist.find(c => c.category === 'channel_integration' && /WhatsApp/i.test(c.item || ''));
     const host = $('#baChannelStatus'); host.replaceChildren();
     const row = make('div','ba-channel-row');
-    const symbol = channel?.status === 'ok' ? '●' : '○';
-    row.append(make('span','ba-check-icon',symbol));
+    const ready = channel?.status === 'ok';
+    const physicallyConnected = details?.connected === true;
+    row.append(make('span','ba-check-icon',ready ? '✓' : physicallyConnected ? '!' : '×'));
     const desc = make('div');
-    desc.append(make('strong','', channel?.status === 'ok' ? 'WhatsApp conectado' : 'WhatsApp precisa de atenção'));
-    desc.append(make('small','',channel?.status === 'ok' ? 'Canal preparado para receber mensagens.' : 'Conexão ainda não validada.'));
+    desc.append(make('strong','',ready ? 'WhatsApp conectado ao atendimento'
+      : physicallyConnected ? 'WhatsApp conectado · Verifique o vínculo do assistente'
+        : 'WhatsApp sem conexão validada'));
+    desc.append(make('small','',details?.message || channel?.message || 'Confira os canais configurados.'));
     row.append(desc); host.append(row);
   }
   async function refreshReadiness() {
@@ -388,14 +437,21 @@
       readiness = result;
       const score = Number.isInteger(result.readiness_score) ? Math.min(100,Math.max(0,result.readiness_score)) : 0;
       setReadinessText(score, result.can_operate === true);
+      const checks = Array.isArray(result.checklist) ? result.checklist : [];
+      const pending = checks.filter(c => c.status !== 'ok');
+      const critical = pending.filter(c => c.status === 'error' && c.severity === 'critical');
+      if (!dirty) $('#baReadyDetail').textContent = pending.length === 0
+        ? 'Nenhuma pendência encontrada. O atendimento ainda depende da sua decisão de ativar.'
+        : `${pending.length} ${pending.length === 1 ? 'pendência' : 'pendências'}, ${critical.length} ${critical.length === 1 ? 'crítica' : 'críticas'}. A nota mede prontidão, não o percentual de regras salvas.`;
       $('#baReadinessList').replaceChildren();
       (Array.isArray(result.checklist) ? result.checklist : []).forEach(addChecklistItem);
-      updateChannel(Array.isArray(result.checklist) ? result.checklist : []);
+      updateChannel(Array.isArray(result.checklist) ? result.checklist : [], result.channel_status);
     } catch (e) {
       $('#baReadyTitle').textContent = 'Verificação indisponível';
       $('#baReadyDetail').textContent = e.message;
       $('#baScore').textContent = '--';
       $('#baDonut').style.setProperty('--pct','0');
+      $('#baChannelStatus').textContent = 'Não foi possível conferir o canal. Atualize a verificação.';
     } finally { $('#baRefresh').disabled = false; }
   }
   async function applyFix(item, btn) {
@@ -451,5 +507,14 @@
   window.addEventListener('beforeunload', e => {
     if (dirty) { e.preventDefault(); e.returnValue = ''; }
   });
-  populate(); updateChatAvailability(); refreshReadiness();
+  try {
+    populate();
+    $('#baDirtyLabel').textContent = hasSaved ? 'Tudo salvo' : 'Pendente de configuração';
+  } catch (error) {
+    console.error('[RS Connect][Business] Falha ao abrir configuração', error);
+    notice('Parte da configuração não pôde ser exibida. Os dados não foram alterados. Atualize a página ou contate o suporte.');
+    $('#baDirtyLabel').textContent = 'Conferência necessária';
+    $('#baSave').disabled = true;
+  }
+  updateChatAvailability(); refreshReadiness();
 })();
