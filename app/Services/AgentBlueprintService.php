@@ -260,8 +260,17 @@ final class AgentBlueprintService
         $currentConfig = is_array($profile['config'] ?? null) ? $profile['config'] : [];
         if (is_array($data['conversation_behavior'] ?? null)) {
             $fallbackBehavior = is_array($currentConfig['conversation_behavior'] ?? null) ? $currentConfig['conversation_behavior'] : [];
+            // Preço/pagamento pertence ao contrato Express quando configurado.
+            // A edição avançada não pode gravar um segundo valor concorrente.
+            $express = is_array($currentConfig['express'] ?? null) ? $currentConfig['express'] : [];
+            $commercial = is_array($express['commercial'] ?? null) ? $express['commercial'] : [];
+            $postedBehavior = $data['conversation_behavior'];
+            if (AgentConversationBehaviorService::paymentFromExpressCommercial($commercial) !== null) {
+                $postedBehavior['payment'] = is_array($fallbackBehavior['payment'] ?? null)
+                    ? $fallbackBehavior['payment'] : [];
+            }
             $currentConfig['conversation_behavior'] = AgentConversationBehaviorService::normalizeConfiguration(
-                $data['conversation_behavior'],
+                $postedBehavior,
                 $fallbackBehavior
             );
         }

@@ -137,6 +137,9 @@ $behaviorDelivery = is_array($conversationBehavior['response_delivery'] ?? null)
 $behaviorServiceMode = is_array($conversationBehavior['service_mode'] ?? null) ? $conversationBehavior['service_mode'] : ['mode' => 'not_applicable', 'fixed_modality' => 'presencial'];
 $behaviorModalities = is_array($conversationBehavior['modalities'] ?? null) ? $conversationBehavior['modalities'] : [];
 $behaviorPayment = is_array($conversationBehavior['payment'] ?? null) ? $conversationBehavior['payment'] : [];
+$expressCommercial = is_array(($agentRulesProfile['config']['express']['commercial'] ?? null))
+    ? $agentRulesProfile['config']['express']['commercial'] : [];
+$hasCanonicalCommercial = \App\Services\AgentConversationBehaviorService::paymentFromExpressCommercial($expressCommercial) !== null;
 $behaviorNoAvailability = is_array($conversationBehavior['no_availability'] ?? null) ? $conversationBehavior['no_availability'] : [];
 $behaviorSpecialRoutes = is_array($conversationBehavior['special_routes'] ?? null) ? array_values($conversationBehavior['special_routes']) : [];
 $teamUsers = is_array($teamUsers ?? null) ? $teamUsers : [];
@@ -535,7 +538,7 @@ $humanizeAgentRule = static function (string $key): string {
                                         </select><small>Usada automaticamente quando “Uma única forma” estiver selecionada.</small></label>
                                     </div>
                                 </div>
-                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Detalhes das formas</span><strong>Online e presencial</strong></div><small>Ative e descreva apenas as formas realmente oferecidas. Em modo de escolha, elas serão as opções disponíveis ao agente.</small></div>
+                                <div class="agent-behavior-subhead"><div><span class="eyebrow">Detalhes das formas</span><strong>Online e presencial</strong></div><small>Estas regras são específicas do atendimento online/presencial e não são ativadas automaticamente pelo link da consulta nem pela pergunta “Modalidade” da triagem.</small></div>
                                 <div class="agent-behavior-grid agent-modality-grid">
                                     <?php $online = is_array($behaviorModalities['online'] ?? null) ? $behaviorModalities['online'] : []; ?>
                                     <article class="agent-behavior-card modality-card">
@@ -558,11 +561,28 @@ $humanizeAgentRule = static function (string $key): string {
                             <div class="agent-behavior-grid">
                                 <article class="agent-behavior-card">
                                     <div class="agent-behavior-card-head"><span class="agent-behavior-index">3</span><div><strong>Valor e formas de pagamento</strong><small>Informe depois de explicar a modalidade, sem depender de memória do prompt.</small></div></div>
-                                    <input type="hidden" name="conversation_behavior[payment][enabled]" value="0">
-                                    <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[payment][enabled]" value="1" <?= !empty($behaviorPayment['enabled']) ? 'checked' : '' ?>><span>Usar estas informações no atendimento</span></label>
-                                    <label class="field compact-field"><span>Valor / regra de preço</span><input name="conversation_behavior[payment][value_text]" value="<?= View::e((string) ($behaviorPayment['value_text'] ?? '')) ?>" placeholder="Ex.: R$ 200 por sessão"></label>
-                                    <div class="field compact-field"><span>Formas aceitas</span><div class="agent-payment-methods"><?php $selectedMethods = is_array($behaviorPayment['methods'] ?? null) ? $behaviorPayment['methods'] : []; foreach ($paymentMethodOptions as $method): ?><label><input type="checkbox" name="conversation_behavior[payment][methods][]" value="<?= View::e($method) ?>" <?= in_array($method, $selectedMethods, true) ? 'checked' : '' ?>><span><?= View::e($method) ?></span></label><?php endforeach; ?></div></div>
-                                    <label class="field compact-field"><span>Complemento opcional</span><textarea name="conversation_behavior[payment][message]" rows="2" placeholder="Ex.: O pagamento pode ser feito antes da sessão."><?= View::e((string) ($behaviorPayment['message'] ?? '')) ?></textarea></label>
+                                    <?php if ($hasCanonicalCommercial): ?>
+                                        <div class="agent-rule-fixed-note" role="note">
+                                            <strong>Valores controlados por Meu atendimento</strong>
+                                            <span>Esta tela não grava outra regra comercial. Preço e formas de pagamento usam a configuração salva pela empresa.</span>
+                                        </div>
+                                        <p class="field-hint"><strong>Como apresentar:</strong> <?= View::e(match ((string) ($expressCommercial['pricing_strategy'] ?? '')) {
+                                            'fixed_price' => 'Preço fixo',
+                                            'variable_price' => 'Preço variável, consultar a equipe',
+                                            default => 'Preço sob consulta',
+                                        }) ?></p>
+                                        <?php if (trim((string) ($behaviorPayment['value_text'] ?? '')) !== ''): ?>
+                                            <p class="field-hint"><strong>Preço salvo:</strong> <?= View::e((string) $behaviorPayment['value_text']) ?></p>
+                                        <?php endif; ?>
+                                        <p class="field-hint"><strong>Formas aceitas:</strong> <?= View::e(implode(', ', (array) ($behaviorPayment['methods'] ?? [])) ?: 'Não cadastradas') ?></p>
+                                        <?php if (!Auth::isSuperAdmin()): ?><p class="field-hint">Para mudar essas informações, abra <a href="<?= View::e(\App\Core\Router::url('/agents')) ?>">Meu atendimento</a>.</p><?php endif; ?>
+                                    <?php else: ?>
+                                        <input type="hidden" name="conversation_behavior[payment][enabled]" value="0">
+                                        <label class="check-field compact-check"><input type="checkbox" name="conversation_behavior[payment][enabled]" value="1" <?= !empty($behaviorPayment['enabled']) ? 'checked' : '' ?>><span>Usar estas informações no atendimento</span></label>
+                                        <label class="field compact-field"><span>Valor / regra de preço</span><input name="conversation_behavior[payment][value_text]" value="<?= View::e((string) ($behaviorPayment['value_text'] ?? '')) ?>" placeholder="Ex.: R$ 200 por sessão"></label>
+                                        <div class="field compact-field"><span>Formas aceitas</span><div class="agent-payment-methods"><?php $selectedMethods = is_array($behaviorPayment['methods'] ?? null) ? $behaviorPayment['methods'] : []; foreach ($paymentMethodOptions as $method): ?><label><input type="checkbox" name="conversation_behavior[payment][methods][]" value="<?= View::e($method) ?>" <?= in_array($method, $selectedMethods, true) ? 'checked' : '' ?>><span><?= View::e($method) ?></span></label><?php endforeach; ?></div></div>
+                                        <label class="field compact-field"><span>Complemento opcional</span><textarea name="conversation_behavior[payment][message]" rows="2" placeholder="Ex.: O pagamento pode ser feito antes da sessão."><?= View::e((string) ($behaviorPayment['message'] ?? '')) ?></textarea></label>
+                                    <?php endif; ?>
                                 </article>
 
                                 <article class="agent-behavior-card">

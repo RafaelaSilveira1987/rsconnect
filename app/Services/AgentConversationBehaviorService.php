@@ -64,6 +64,15 @@ final class AgentConversationBehaviorService
 
         $normalized = self::normalizeConfiguration($raw);
 
+        // A Configuração Expressa é a autoridade de preços e pagamentos quando
+        // aplicada. O editor técnico antigo não pode anunciar outro preço.
+        $express = is_array($config['express'] ?? null) ? $config['express'] : [];
+        $commercial = is_array($express['commercial'] ?? null) ? $express['commercial'] : [];
+        $canonicalPayment = self::paymentFromExpressCommercial($commercial);
+        if ($canonicalPayment !== null) {
+            $normalized['payment'] = $canonicalPayment;
+        }
+
         // 36.37.2: a Ordem do atendimento é a única autoridade para decidir se
         // "Motivo resumido do contato" existe no fluxo e se ele vem antes da agenda.
         // A configuração histórica conversation_behavior.demand permanece apenas como
@@ -82,6 +91,48 @@ final class AgentConversationBehaviorService
         }
 
         return $normalized;
+    }
+
+    /**
+     * Projeta a única fonte comercial do tenant para a linguagem operacional do
+     * atendimento. Retorna null para perfis legados sem configuração Expressa.
+     * Nunca promove preço inválido a uma afirmação que a IA possa repetir.
+     *
+     * @param array<string,mixed> $commercial
+     * @return array{enabled:bool,value_text:string,methods:list<string>,message:string}|null
+     */
+    public static function paymentFromExpressCommercial(array $commercial): ?array
+    {
+        $strategy = $commercial['pricing_strategy'] ?? null;
+        if (!is_string($strategy) || !in_array($strategy, ['fixed_price', 'variable_price', 'on_request'], true)) {
+            return null;
+        }
+        $methodLabels = [
+            'pix' => 'Pix',
+            'credit_card' => 'Cartão de crédito',
+            'debit_card' => 'Cartão de débito',
+            'bank_transfer' => 'Transferência',
+            'cash' => 'Dinheiro',
+        ];
+        $methods = [];
+        foreach ((array) ($commercial['payment_methods'] ?? []) as $method) {
+            if (is_string($method) && isset($methodLabels[$method])) {
+                $methods[] = $methodLabels[$method];
+            }
+        }
+        $methods = array_values(array_unique($methods));
+        $price = trim((string) ($commercial['price_value'] ?? ''));
+        $validPrice = $strategy === 'fixed_price'
+            && preg_match('/^R\$\s*(?:\d{1,3}(?:\.\d{3})*|\d+),\d{2}$/u', $price) === 1;
+
+        return [
+            'enabled' => $validPrice || $methods !== [],
+            'value_text' => $validPrice ? $price : '',
+            'methods' => $methods,
+            // Complementos antigos podem incluir outro preço; nunca anexá-los
+            // a uma política comercial controlada pelo editor canônico.
+            'message' => '',
+        ];
     }
 
     /**
