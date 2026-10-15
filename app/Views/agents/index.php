@@ -140,6 +140,7 @@ $behaviorPayment = is_array($conversationBehavior['payment'] ?? null) ? $convers
 $expressCommercial = is_array(($agentRulesProfile['config']['express']['commercial'] ?? null))
     ? $agentRulesProfile['config']['express']['commercial'] : [];
 $hasCanonicalCommercial = \App\Services\AgentConversationBehaviorService::paymentFromExpressCommercial($expressCommercial) !== null;
+$hasCanonicalModalities = !empty($agentRulesProfile['config']['express']['modalities_managed']);
 $behaviorNoAvailability = is_array($conversationBehavior['no_availability'] ?? null) ? $conversationBehavior['no_availability'] : [];
 $behaviorSpecialRoutes = is_array($conversationBehavior['special_routes'] ?? null) ? array_values($conversationBehavior['special_routes']) : [];
 $teamUsers = is_array($teamUsers ?? null) ? $teamUsers : [];
@@ -524,6 +525,23 @@ $humanizeAgentRule = static function (string $key): string {
                             </div>
 
                             <div class="agent-behavior-subsection">
+                                <?php if ($hasCanonicalModalities): ?>
+                                    <?php $mod = \App\Services\ServiceModalityConfiguration::fromBehavior(
+                                        (array) ($agentRulesProfile['config']['conversation_behavior'] ?? [])); ?>
+                                    <div class="agent-rule-fixed-note" role="note">
+                                        <strong>Formas de atendimento controladas por Meu atendimento</strong>
+                                        <span>As modalidades agora são configuradas uma única vez pela empresa. O editor avançado não modifica esses campos.</span>
+                                        <p><b>Oferece:</b> <?= View::e(match ($mod['mode']) { 'online'=>'Somente online', 'presencial'=>'Somente presencial', 'both'=>'Online e presencial', default=>'Não se aplica' }) ?></p>
+                                        <?php if (in_array($mod['mode'], ['online','both'], true)): ?><p><b>Online:</b> <?= View::e($mod['online_channel']) ?></p><?php endif; ?>
+                                        <?php if (in_array($mod['mode'], ['presencial','both'], true)): ?>
+                                        <p><b>Local:</b> <?= View::e($mod['presencial_location']) ?></p>
+                                        <p><b>Dias presenciais:</b> <?= View::e(implode(', ', $mod['presencial_days'])) ?></p>
+                                        <?php endif; ?>
+                                        <?php if (!Auth::isSuperAdmin()): ?>
+                                        <p><a href="<?= View::e(\App\Core\Router::url('/agents')) ?>">Abrir Meu atendimento</a></p>
+                                        <?php else: ?><p>Para alterar, acesse o painel Meu atendimento da empresa.</p><?php endif; ?>
+                                    </div>
+                                <?php else: ?>
                                 <div class="agent-behavior-subhead"><div><span class="eyebrow">Forma de atendimento</span><strong>Defina se modalidade existe neste negócio</strong></div><small>A RS Connect não obriga mais todos os segmentos a escolher entre online e presencial.</small></div>
                                 <div class="agent-behavior-card agent-service-mode-card">
                                     <div class="form-grid two">
@@ -556,6 +574,7 @@ $humanizeAgentRule = static function (string $key): string {
                                         <label class="field compact-field"><span>Mensagem operacional</span><textarea name="conversation_behavior[modalities][presencial][message]" rows="3" placeholder="Ex.: Os atendimentos presenciais acontecem no Bronze, somente às segundas-feiras."><?= View::e((string) ($presencial['message'] ?? '')) ?></textarea></label>
                                     </article>
                                 </div>
+                                <?php endif ?>
                             </div>
 
                             <div class="agent-behavior-grid">

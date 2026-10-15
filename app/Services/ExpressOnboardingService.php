@@ -87,6 +87,22 @@ final class ExpressOnboardingService
             $previousConfig = json_decode((string) ($previous['config_json'] ?? ''), true);
             $config = is_array($previousConfig) ? $previousConfig : [];
             foreach ($compiled['config'] as $key => $value) $config[$key] = $value;
+            // conversation_behavior é a fonte operacional usada pelo agente.
+            // Uma reaplicação do blueprint jamais deve sobrescrever ajustes
+            // conversacionais da empresa com o modelo-base.
+            if (is_array($previousConfig['conversation_behavior'] ?? null)) {
+                $config['conversation_behavior'] = $previousConfig['conversation_behavior'];
+            }
+            if (is_array($dto->serviceModalities)) {
+                $config['conversation_behavior'] = ServiceModalityConfiguration::applyToBehavior(
+                    is_array($config['conversation_behavior'] ?? null) ? $config['conversation_behavior'] : [],
+                    $dto->serviceModalities
+                );
+                $config['express']['modalities_managed'] = true;
+            } elseif (!empty($previousConfig['express']['modalities_managed'])) {
+                // Wizard antigo / API sem campo novo: preservar propriedade e dados.
+                $config['express']['modalities_managed'] = true;
+            }
             $json = static fn (mixed $value): string => json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             $profile = $pdo->prepare(

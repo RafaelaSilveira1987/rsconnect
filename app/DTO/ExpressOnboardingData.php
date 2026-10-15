@@ -33,5 +33,7 @@ final readonly class ExpressOnboardingData
         public bool $allowRescheduling,
         public bool $escalateToHumanOnError,
         public bool $sendMeetingLinkOnConfirmation,
+        /** @var array<string,mixed>|null Ausência preserva a modalidade já configurada. */
+        public ?array $serviceModalities = null,
     ) {}
 }

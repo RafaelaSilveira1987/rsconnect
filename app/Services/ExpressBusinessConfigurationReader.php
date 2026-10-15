@@ -76,6 +76,8 @@ final class ExpressBusinessConfigurationReader
         foreach ($capQuery->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $capabilities[(string) $row['capability_key']] = (int) $row['enabled'] === 1;
         }
+        $behavior = is_array($config['conversation_behavior'] ?? null) ? $config['conversation_behavior'] : [];
+        $serviceModalities = ServiceModalityConfiguration::fromBehavior($behavior);
         $commercial = is_array($express['commercial'] ?? null) ? $express['commercial'] : [];
         $routing = is_array($express['routing'] ?? null) ? $express['routing'] : [];
         $defaultHours = [];
@@ -115,6 +117,7 @@ final class ExpressBusinessConfigurationReader
             'knowledge_base' => [
                 'faq'=>array_values(array_filter((array) ($express['faq'] ?? []), 'is_array')),
             ],
+            'service_modalities' => $serviceModalities,
             'capabilities' => [
                 'allow_rescheduling'=>(bool) ($capabilities['calendar.reschedule'] ?? false),
                 'escalate_to_human_on_error'=>(bool) ($capabilities['handoff.on_error'] ?? true),

@@ -192,7 +192,7 @@ $svgIcon = static function (string $name): string {
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.4')) ?>">
     <?php if (!empty($expressAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-express.css?v=1&rev=20261014')) ?>"><?php endif; ?>
-    <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1&rev=20261014')) ?>"><?php endif; ?>
+    <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1&rev=20261015modalidades')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-ui-harmony.css?v=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets) || !empty($activationAssets) || !empty($blueprintAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-activation-unified.css?v=20261014b')) ?>"><?php endif; ?>
     <?php if ($businessDesign): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-business-unified.css?v=20261015a')) ?>"><?php endif; ?>
@@ -550,6 +550,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
 <script src="<?= View::e(Router::url('/assets/js/app.js?v=36.41.8')) ?>" defer></script>
 <?php if (!empty($expressAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-express.js?v=1&rev=20261015flowfix')) ?>" defer></script><?php endif; ?>
-<?php if (!empty($businessDashboardAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-business.js?v=1&rev=20261015flowfix')) ?>" defer></script><?php endif; ?>
+<?php if (!empty($businessDashboardAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-business.js?v=1&rev=20261015modalidades')) ?>" defer></script><?php endif; ?>
 </body>
 </html>

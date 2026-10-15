@@ -160,12 +160,53 @@ final class ExpressOnboardingRequest
         if ($sendLink && ($link === null || $link === '')) {
             $errors['routing_and_schedule.default_meeting_link'] = 'Link obrigatório quando o envio está habilitado.';
         }
+        // Bloco opcional para compatibilidade com o wizard da Fase 1 e clientes
+        // antigos. Ausente = preservar modalidade, nunca zerar a configuração.
+        $modalities = null;
+        if (array_key_exists('service_modalities', $payload)) {
+            $path = 'service_modalities';
+            $rawModality = $object($payload['service_modalities'], $path);
+            $modalityMode = $str($rawModality, 'mode', "$path.mode", 24) ?? '';
+            if (!in_array($modalityMode, ['not_applicable','online','presencial','both'], true)) {
+                $errors["$path.mode"] = 'Escolha: não se aplica, online, presencial ou ambos.';
+            }
+            $channel = $str($rawModality, 'online_channel', "$path.online_channel", 180, false) ?? '';
+            $onlineMessage = $str($rawModality, 'online_message', "$path.online_message", 500, false) ?? '';
+            $location = $str($rawModality, 'presencial_location', "$path.presencial_location", 300, false) ?? '';
+            $presencialMessage = $str($rawModality, 'presencial_message', "$path.presencial_message", 500, false) ?? '';
+            $allowed = $rawModality['presencial_days'] ?? null;
+            if (!is_array($allowed) || !array_is_list($allowed) || count($allowed) > 7) {
+                $errors["$path.presencial_days"] = 'Selecione dias válidos.';
+                $allowed = [];
+            }
+            foreach ($allowed as $idx => $value) {
+                if (!is_string($value) || !in_array($value, ['mon','tue','wed','thu','fri','sat','sun'], true)) {
+                    $errors["$path.presencial_days.$idx"] = 'Dia inválido.';
+                }
+            }
+            if (count(array_unique($allowed)) !== count($allowed)) {
+                $errors["$path.presencial_days"] = 'Dias repetidos.';
+            }
+            if (in_array($modalityMode, ['online','both'], true) && $channel === '') {
+                $errors["$path.online_channel"] = 'Informe como acontece o atendimento online.';
+            }
+            if (in_array($modalityMode, ['presencial','both'], true)) {
+                if ($location === '') $errors["$path.presencial_location"] = 'Informe o local do atendimento presencial.';
+                if ($allowed === []) $errors["$path.presencial_days"] = 'Marque pelo menos um dia presencial.';
+            }
+            $modalities = [
+                'mode'=>$modalityMode, 'online_channel'=>$channel,
+                'online_message'=>$onlineMessage, 'presencial_location'=>$location,
+                'presencial_days'=>array_values($allowed),
+                'presencial_message'=>$presencialMessage,
+            ];
+        }
         if ($errors !== []) throw new ExpressValidationException($errors);
         return new ExpressOnboardingData(
             $name, $segment, $tone, $pricing, $pricing === 'fixed_price' ? $price : null,
             array_values($methods), $collectName, $collectPhone, array_values(array_map('trim', $questions)),
             $timezone, array_values($hours), $afterAction, $link !== '' ? $link : null,
-            array_values($faq), $reschedule, $escalate, $sendLink
+            array_values($faq), $reschedule, $escalate, $sendLink, $modalities
         );
     }
 }

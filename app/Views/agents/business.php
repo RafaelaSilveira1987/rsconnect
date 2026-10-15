@@ -104,8 +104,42 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
             <ul id="baOtherQuestionsList"></ul>
           </div>
         </div>
+        <div class="ba-card" id="baModalitiesCard">
+          <div class="ba-card-head"><span class="ba-section-icon" aria-hidden="true">◇</span><div><h2>Como acontecem os atendimentos?</h2><p>Escolha onde a empresa atende. Os dias de consulta podem ser diferentes do horário em que a equipe responde às mensagens.</p></div></div>
+          <label class="ba-field">Formas de atendimento oferecidas
+            <select class="ba-input" data-bind="service_modalities.mode" id="baServiceMode">
+              <option value="not_applicable">Não se aplica ao meu negócio</option>
+              <option value="online">Somente online</option>
+              <option value="presencial">Somente presencial</option>
+              <option value="both">Online e presencial</option>
+            </select>
+          </label>
+          <div class="ba-modality-settings" id="baOnlineSettings" hidden>
+            <h3>Atendimento online</h3>
+            <label class="ba-field">Como acontece (ex.: Google Meet, Zoom)
+              <input class="ba-input" type="text" data-bind="service_modalities.online_channel" maxlength="180" placeholder="Ex.: Google Meet">
+            </label>
+            <label class="ba-field">Informação adicional para o cliente (opcional)
+              <input class="ba-input" type="text" data-bind="service_modalities.online_message" maxlength="500" placeholder="Ex.: Enviamos o link depois da confirmação">
+            </label>
+          </div>
+          <div class="ba-modality-settings" id="baPresencialSettings" hidden>
+            <h3>Atendimento presencial</h3>
+            <label class="ba-field">Local do atendimento
+              <input class="ba-input" type="text" data-bind="service_modalities.presencial_location" maxlength="300" placeholder="Ex.: Unidade Centro, Rua...">
+            </label>
+            <fieldset class="ba-choice-group"><legend>Em quais dias há atendimento presencial?</legend>
+              <div class="ba-modality-days" id="baPresencialDays"></div>
+            </fieldset>
+            <label class="ba-field">Informação adicional para o cliente (opcional)
+              <input class="ba-input" type="text" data-bind="service_modalities.presencial_message" maxlength="500" placeholder="Ex.: Atendimento presencial somente mediante confirmação">
+            </label>
+          </div>
+          <div class="ba-soft-note" id="baModalitiesWarning" hidden>Para oferecer as duas formas, confira na Ativação Assistida se a preferência online/presencial é coletada antes de consultar a agenda. Alterar a forma de atendimento aqui não modifica automaticamente as perguntas.</div>
+          <div class="ba-soft-note">Esses dias definem a modalidade presencial, não criam vagas. Duração, capacidade e aprovação continuam sob as regras da <a href="<?= View::e(Router::url('/calendar')) ?>">Agenda</a>. O link da consulta online é definido abaixo.</div>
+        </div>
         <div class="ba-card">
-          <div class="ba-card-head"><span class="ba-section-icon" aria-hidden="true">R$</span><div><h2>Valores e consultas online</h2><p>Defina como apresentar preços e como compartilhar o acesso à consulta.</p></div></div>
+          <div class="ba-card-head"><span class="ba-section-icon" aria-hidden="true">R$</span><div><h2>Valores e link da consulta</h2><p>Defina como apresentar preços e como compartilhar o acesso à consulta.</p></div></div>
           <div class="ba-two-cols">
             <label class="ba-field">Como informar o preço<select class="ba-input" data-bind="commercial_info.pricing_strategy"><option value="on_request">Informar sob consulta</option><option value="fixed_price">Preço fixo</option><option value="variable_price">Preço variável — consultar equipe</option></select></label>
             <label class="ba-field" id="baPriceRow">Preço definido<input class="ba-input" data-bind="commercial_info.price_value" maxlength="40" placeholder="R$ 250,00" inputmode="decimal"></label>

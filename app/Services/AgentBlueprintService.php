@@ -265,6 +265,13 @@ final class AgentBlueprintService
             $express = is_array($currentConfig['express'] ?? null) ? $currentConfig['express'] : [];
             $commercial = is_array($express['commercial'] ?? null) ? $express['commercial'] : [];
             $postedBehavior = $data['conversation_behavior'];
+            // Modalidades pertencem à empresa quando configuradas no painel
+            // Meu atendimento. Um formulário avançado antigo não pode substituí-las.
+            if (!empty($express['modalities_managed'])) {
+                foreach (['service_mode', 'modalities'] as $owned) {
+                    $postedBehavior[$owned] = $fallbackBehavior[$owned] ?? [];
+                }
+            }
             if (AgentConversationBehaviorService::paymentFromExpressCommercial($commercial) !== null) {
                 $postedBehavior['payment'] = is_array($fallbackBehavior['payment'] ?? null)
                     ? $fallbackBehavior['payment'] : [];

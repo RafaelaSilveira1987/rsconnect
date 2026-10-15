@@ -9,3 +9,12 @@
 @media(max-width:1100px){.ba-layout{grid-template-columns:minmax(0,1fr) minmax(280px,.55fr)}.ba-switch-stack{grid-template-columns:1fr}.ba-scorebox{flex-direction:column;align-items:center;text-align:center}.ba-tabs{justify-content:flex-start}.ba-tab{flex:0 0 auto}}
 @media(max-width:840px){.ba-layout{grid-template-columns:1fr}.ba-sidebar{position:static;max-height:none;overflow:visible;display:grid;grid-template-columns:1fr 1fr}.ba-scorebox{flex-direction:row;text-align:left}.ba-topbar{flex-wrap:wrap}.ba-top-actions{width:100%;justify-content:space-between}.ba-tab{flex:1 0 auto}}
 @media(max-width:620px){.business-agent{padding:0 0 28px}.ba-card,.ba-sidebar .ba-card{padding:16px;border-radius:12px}.ba-sidebar{display:flex}.ba-tone-grid,.ba-two-cols,.ba-switch-stack{grid-template-columns:1fr}.ba-scorebox{flex-direction:row}.ba-tab{font-size:12px;padding:10px}.ba-tab span{display:none}.ba-topbar h1{font-size:24px}}
+
+/* Modalidades: os controles seguem os mesmos cartões do restante do painel. */
+.ba-modality-settings{background:#f9fbfe;border:1px solid #e0e8f2;border-radius:12px;padding:18px;margin:0 0 14px}
+.ba-modality-settings[hidden]{display:none!important}
+.ba-modality-settings h3{font-size:14px;font-weight:740;margin:0 0 16px}
+.ba-modality-days{display:flex;flex-wrap:wrap;gap:8px;margin:5px 0 20px}
+.ba-modality-day{display:flex;align-items:center;gap:7px;border:1px solid #dce5ef;border-radius:9px;background:#fff;padding:9px 10px;font-size:12px;cursor:pointer}
+.ba-modality-day:has(input:checked){background:#edf8f7;border-color:#79c8c4}
+.ba-modality-day input{accent-color:#159b9b}

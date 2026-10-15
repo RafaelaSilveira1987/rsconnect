@@ -46,6 +46,12 @@
       (Array.isArray(hours[short]) ? hours[short] : []).filter(p => Array.isArray(p) && p.length === 2)
         .map(p => ({day,start:p[0],end:p[1]})));
   }
+  // Os registros anteriores usam conversation_behavior. A leitura da API
+  // já os converte para este formato, sem habilitar novas modalidades.
+  if (!data.service_modalities || typeof data.service_modalities !== 'object') {
+    data.service_modalities = {mode:'not_applicable',online_channel:'',online_message:'',presencial_location:'',presencial_days:[],presencial_message:''};
+  }
+  data.service_modalities.presencial_days ||= [];
   const agent = initial.primary_agent || null;
   const canManage = root.dataset.canManage === '1';
   const canView = root.dataset.canView === '1';
@@ -153,11 +159,12 @@
       input.checked = data.commercial_info.payment_methods.includes(input.value);
       input.disabled = !canManage;
     });
-    updateName(); updatePrice(); renderHours(); renderQuestions(); renderFaq();
+    updateName(); updatePrice(); renderHours(); renderQuestions(); renderFaq(); renderModalities();
   }
   $$('[data-bind]').forEach(node => node.addEventListener(node.tagName === 'INPUT' && node.type !== 'checkbox' ? 'input' : 'change', () => {
     const value = node.type === 'checkbox' ? node.checked : node.value;
     set(data, node.dataset.bind, value);
+    if (node.dataset.bind === 'service_modalities.mode') renderModalities();
     if (node.dataset.bind === 'business_info.agent_name') updateName();
     if (node.dataset.bind === 'commercial_info.pricing_strategy') {
       if (value !== 'fixed_price') data.commercial_info.price_value = null;
@@ -172,6 +179,26 @@
     data.commercial_info.payment_methods = $$('input[name="baPayment"]:checked').map(input => input.value);
     markDirty();
   }));
+  const modalityDays = [['mon','Segunda'],['tue','Terça'],['wed','Quarta'],['thu','Quinta'],['fri','Sexta'],['sat','Sábado'],['sun','Domingo']];
+  function renderModalities() {
+    const m = data.service_modalities;
+    $('#baOnlineSettings').hidden = !['online','both'].includes(m.mode);
+    $('#baPresencialSettings').hidden = !['presencial','both'].includes(m.mode);
+    $('#baModalitiesWarning').hidden = m.mode !== 'both';
+    const host = $('#baPresencialDays'); host.replaceChildren();
+    for (const [day, label] of modalityDays) {
+      const wrap = make('label','ba-modality-day');
+      const check = make('input'); check.type = 'checkbox'; check.value = day;
+      check.checked = m.presencial_days.includes(day); check.disabled = !canManage;
+      check.addEventListener('change', () => {
+        m.presencial_days = check.checked
+          ? [...m.presencial_days,day].filter((value, idx, list) => list.indexOf(value) === idx)
+          : m.presencial_days.filter(value => value !== day);
+        markDirty();
+      });
+      wrap.append(check, make('span','',label)); host.append(wrap);
+    }
+  }
   function removeButton(label, handler) {
     const btn = make('button', 'ba-remove', '×'); btn.type = 'button'; btn.title = label;
     btn.setAttribute('aria-label', label); btn.disabled = !canManage;
@@ -292,6 +319,13 @@
       catch { return ['rules','Confira se o link de reunião está correto.']; }
     }
     if (d.capabilities.send_meeting_link_on_confirmation && !url) return ['rules','Informe um link antes de ativar o envio após a confirmação.'];
+    const m = d.service_modalities;
+    if (!['not_applicable','online','presencial','both'].includes(m.mode)) return ['rules','Selecione a forma de atendimento.'];
+    if (['online','both'].includes(m.mode) && !m.online_channel.trim()) return ['rules','Informe como acontece o atendimento online.'];
+    if (['presencial','both'].includes(m.mode)) {
+      if (!m.presencial_location.trim()) return ['rules','Informe o local do atendimento presencial.'];
+      if (!Array.isArray(m.presencial_days) || !m.presencial_days.length) return ['rules','Selecione os dias do atendimento presencial.'];
+    }
     if (d.knowledge_base.faq.length > 40 || d.knowledge_base.faq.some(f => !f.question?.trim() || !f.answer?.trim() || f.question.length > 250 || f.answer.length > 1500)) return ['faq','Preencha todas as perguntas e respostas (até 40).'];
     return null;
   }
@@ -309,6 +343,12 @@
       question: pair.question.trim().replace(/\s+/g,' '),
       answer: pair.answer.trim().replace(/\s+/g,' '),
     }));
+    if (result.service_modalities) {
+      result.service_modalities.presencial_days = [...(result.service_modalities.presencial_days || [])].sort();
+      for (const field of ['online_channel','online_message','presencial_location','presencial_message']) {
+        result.service_modalities[field] = (result.service_modalities[field] || '').trim();
+      }
+    }
     result.routing_and_schedule.default_meeting_link ||= null;
     if (result.commercial_info.pricing_strategy !== 'fixed_price') result.commercial_info.price_value = null;
     return result;
@@ -317,7 +357,7 @@
     const labels = {
       business_info:'identidade', commercial_info:'valores e pagamentos',
       triage_config:'informações e perguntas', routing_and_schedule:'horários de atendimento',
-      knowledge_base:'dúvidas frequentes', capabilities:'permissões do atendimento',
+      knowledge_base:'dúvidas frequentes', service_modalities:'modalidades online e presencial', capabilities:'permissões do atendimento',
     };
     const a = canonicalPayload(expected), b = canonicalPayload(persisted);
     return Object.keys(labels).filter(key => JSON.stringify(a[key]) !== JSON.stringify(b[key]))

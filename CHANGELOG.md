@@ -1,3 +1,13 @@
+## 15/10/2026 — Fonte única das modalidades online e presencial (Meu atendimento)
+
+- Meu atendimento: escolha explícita de modalidade, meio online, local e dias presenciais.
+- API Expressa: `service_modalities` opcional, validação estrita e preservação do contrato legado.
+- Uma só fonte operacional para o agente: `conversation_behavior` no perfil da empresa.
+- Admin: após gerência pelo painel da empresa, modalidades passam a ser somente leitura.
+- Reaplicação de Blueprint preserva regras de modalidade e demais regras conversacionais personalizadas.
+- Conferência pós-salvamento inclui modalidades; assets do painel têm revisão de cache.
+- Sem alterações nas tabelas, slots, confirmação humana ou lógica de agendamento.
+
 ## 2026-10-15 — Hotfix de coerência: triagem, prontidão e expediente
 
 - Corrige perda de vínculos da triagem na Ativação Assistida e protege etapas avançadas.
