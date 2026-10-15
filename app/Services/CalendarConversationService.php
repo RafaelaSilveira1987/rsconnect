@@ -503,8 +503,12 @@ final class CalendarConversationService
             ]);
         }
 
-        // Aprovação humana sempre prevalece sobre a permissão textual "IA pode confirmar".
-        if (empty($settings['ai_can_confirm']) || !empty($settings['require_human_approval'])) {
+        // A política central valida a permissão operacional, não um texto da LLM.
+        $operationDecision = (new AppointmentOperationPolicyService())->evaluate(
+            'confirm_ai', $tenantId, $appointment, $settings
+        );
+        if (empty($operationDecision['allowed'])
+            && in_array((string) $operationDecision['code'], ['human_approval_required', 'automatic_confirmation_disabled'], true)) {
             $message = 'Sua preferência de horário está registrada. A confirmação final ainda depende da validação da equipe.';
             $send = $this->sendAppointmentMessage(
                 $appointment,
@@ -902,6 +906,19 @@ final class CalendarConversationService
         }
         if (trim((string) ($appointment['starts_at'] ?? '')) === '' || trim((string) ($appointment['ends_at'] ?? '')) === '') {
             return ['ok' => false, 'message' => 'O horário selecionado não possui início e fim válidos.'];
+        }
+
+        // Releitura: a confirmação não pode confiar num snapshot antigo do webhook.
+        $currentAppointment = $this->appointmentForMessaging($tenantId, $appointmentId);
+        if (!$currentAppointment) {
+            return ['ok' => false, 'message' => 'Agendamento não encontrado.'];
+        }
+        $appointment = $currentAppointment;
+        $decision = (new AppointmentOperationPolicyService())->evaluate(
+            'confirm_ai', $tenantId, $appointment, (new PreSchedulingService())->settings($tenantId)
+        );
+        if (!$decision['allowed']) {
+            return ['ok' => false, 'message' => $decision['message']];
         }
 
         $professionalService = new ProfessionalCalendarService();

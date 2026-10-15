@@ -636,6 +636,16 @@ final class CalendarController
             $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?tenant_id=' . $tenantId);
         }
 
+        // Bloqueia transições inválidas ANTES de editar link ou chamar APIs externas.
+        $transition = (new \App\Services\AppointmentOperationPolicyService())->validateManualTransition(
+            (string) ($appointmentBefore['status'] ?? ''), $status
+        );
+        if (!$transition['allowed']) {
+            Flash::set('error', $transition['message']);
+            $this->redirect($returnTo !== '' && str_starts_with($returnTo, '/') ? $returnTo : '/calendar?tenant_id=' . $tenantId);
+            return;
+        }
+
         // 36.41.4: em atendimentos online o link pode ser informado no próprio ato
         // de confirmar o pré-agendamento. Persistimos antes da sincronização Google e
         // antes da comunicação com o cliente, para que {{local}}/{{link_consulta}}
@@ -786,6 +796,7 @@ final class CalendarController
             'status_changed_by_user_id' => Auth::id(),
             'id' => $appointmentId,
             'tenant_id' => $tenantId,
+            'expected_status' => (string) ($appointmentBefore['status'] ?? ''),
         ];
         if ($this->hasColumn('calendar_appointments', 'approval_status') && $approvalStatus !== null) {
             $approvalSet = ', approval_status = :approval_status';
@@ -801,12 +812,12 @@ final class CalendarController
              SET status = :status,
                  status_changed_by_user_id = :status_changed_by_user_id' . $approvalSet . ',
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id AND tenant_id = :tenant_id'
+             WHERE id = :id AND tenant_id = :tenant_id AND status = :expected_status'
         );
         $statement->execute($params);
 
         if ($statement->rowCount() === 0) {
-            Flash::set('error', 'Agendamento não encontrado.');
+            Flash::set('error', 'O agendamento foi alterado por outra operação. Atualize a página e confira o estado atual.');
         } else {
             Audit::log('calendar.appointment_status_updated', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
             $this->trySyncToN8n($appointmentId, $tenantId, 'status_updated');

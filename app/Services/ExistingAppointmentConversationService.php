@@ -221,6 +221,30 @@ final class ExistingAppointmentConversationService
             ]);
         }
 
+        // Operações com agendamentos existentes passam pelo mesmo contrato de permissões.
+        // Pedir cancelamento/remarcação não é executar a alteração na agenda.
+        $operation = match ($intent) {
+            'cancel' => 'request_cancel',
+            'reschedule' => 'request_reschedule',
+            default => 'consult',
+        };
+        $operationDecision = (new AppointmentOperationPolicyService())->evaluate(
+            $operation, $tenantId, $appointment, [],
+            $intent !== 'reschedule' || (new AgentBlueprintService())->can($tenantId, 'calendar.reschedule', 0, true, $pdo)
+        );
+        if (!$operationDecision['allowed']) {
+            $context = $this->contactContext($pdo, $tenantId, $contactId, $conversationId);
+            $send = $context ? $communication->sendAppointmentMessage(
+                $context, $operationDecision['message'], 'calendar.operation_policy_blocked',
+                ['appointment_id' => $appointmentId, 'reason' => $operationDecision['code']]
+            ) : ['ok' => false, 'error' => 'Contato não identificado'];
+            $this->markHandled($pdo, $tenantId, $conversationId, $incomingMessageId, $intent, $appointmentId, !empty($send['ok']));
+            return array_merge($this->result(true, true, 'operation_policy_blocked'), [
+                'intent' => $intent, 'policy_code' => $operationDecision['code'],
+                'message_sent' => !empty($send['ok']), 'send_error' => $send['error'] ?? null,
+            ]);
+        }
+
         $message = '';
         if (in_array($intent, ['status', 'details'], true)) {
             $message = $this->appointmentStatusMessage($appointment, $intent);
