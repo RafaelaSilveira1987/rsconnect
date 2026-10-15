@@ -1,0 +1,98 @@
+/* RS Connect · 15/10/2026
+   Camada visual incremental de módulos de negócio, sem reescrever o layout
+   do chat, calendário, kanban ou formulários transacionais.
+   Escopo: main.rs-business-unified, ativado apenas nas rotas autorizadas. */
+.main-content.rs-business-unified {
+  --rs-unified-border: #e0e8f1;
+  --rs-unified-ink: #20314a;
+  --rs-unified-muted: #687a91;
+  --rs-unified-accent: var(--rs-blue, #246db4);
+  --rs-unified-ring: rgba(36,109,180,.17);
+  --rs-unified-card-shadow: 0 4px 20px rgba(26,49,83,.045);
+}
+/* Superfícies: um único estilo para as seções de negócio mais recorrentes. */
+.rs-business-unified .page-content :is(.card, .metric-card, .queue-hero, .agent-niche-card, .agent-blueprint-card) {
+  border: 1px solid var(--rs-unified-border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--rs-unified-card-shadow);
+}
+.rs-business-unified .page-content :is(.page-heading, .section-heading) { gap: 14px 22px; }
+.rs-business-unified .page-content :is(.page-heading, .section-heading) :is(h2, h3) {
+  color: var(--rs-unified-ink);
+  letter-spacing: -.02em;
+}
+.rs-business-unified .page-content :is(.page-heading, .section-heading) p {
+  color: var(--rs-unified-muted);
+  line-height: 1.55;
+}
+.rs-business-unified .page-content .eyebrow { letter-spacing: .12em; }
+/* Controles padronizados sem modificar inputs de composição do chat. */
+.rs-business-unified .page-content :is(.field, .filter-bar) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.rs-business-unified .page-content :is(input.form-control, select.form-control, textarea.form-control) {
+  border: 1px solid #d4dfeb;
+  background-color: #fff;
+  border-radius: 10px;
+  color: var(--rs-unified-ink);
+}
+.rs-business-unified .page-content :is(.field, .filter-bar) :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus-visible,
+.rs-business-unified .page-content :is(input.form-control, select.form-control, textarea.form-control):focus-visible {
+  outline: 3px solid var(--rs-unified-ring);
+  outline-offset: 1px;
+  border-color: var(--rs-unified-accent);
+}
+.rs-business-unified .page-content :is(.field, .filter-bar) :is(input:not([type="checkbox"]):not([type="radio"]), select):disabled,
+.rs-business-unified .page-content :is(.field, .filter-bar) textarea:disabled { opacity: .68; cursor: not-allowed; }
+/* Ações. Mantém as cores da marca e os estados de segurança existentes. */
+.rs-business-unified .page-content .btn {
+  border-radius: 10px;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.rs-business-unified .page-content .btn-primary {
+  background: var(--rs-unified-accent);
+  border-color: var(--rs-unified-accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(20,100,152,.12);
+}
+.rs-business-unified .page-content .btn:focus-visible {
+  outline: 3px solid var(--rs-unified-ring);
+  outline-offset: 2px;
+}
+.rs-business-unified .page-content :is(.filter-bar, .conversation-filters) {
+  border-color: var(--rs-unified-border);
+  border-radius: 14px;
+}
+.rs-business-unified .page-content :is(.filter-bar, .conversation-filters) .filter-search {
+  border-color: #d4dfeb;
+  border-radius: 10px;
+}
+/* Campo interno da busca continua sem borda; a borda pertence ao contêiner. */
+.rs-business-unified .page-content .filter-search input,
+.rs-business-unified .page-content .filter-search input:focus-visible {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.rs-business-unified .page-content .filter-search:focus-within {
+  border-color: var(--rs-unified-accent);
+  box-shadow: 0 0 0 3px var(--rs-unified-ring);
+}
+.rs-business-unified .page-content .table-wrap { border-radius: 12px; }
+/* Editor de modelos: distribuição respirada dos presets. */
+.rs-business-unified .rs-model-suggestions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.rs-business-unified .rs-model-suggestion.is-included { background: #f2f7fc; }
+.rs-business-unified .rs-model-suggestion.is-included input { cursor: not-allowed; }
+.rs-business-unified .rs-model-suggestion input:not(:disabled) { cursor: pointer; }
+@media (max-width: 850px) {
+  .rs-business-unified .page-content { padding-inline: clamp(12px, 3vw, 20px); }
+  .rs-business-unified .rs-model-suggestions { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .rs-business-unified .page-content :is(.card, .metric-card) { border-radius: 13px; }
+  .rs-business-unified .page-content :is(.page-heading, .section-heading) { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-business-unified .page-content .btn { transition: none; }
+}

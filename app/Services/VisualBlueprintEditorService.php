@@ -13,6 +13,37 @@ use InvalidArgumentException;
  */
 final class VisualBlueprintEditorService
 {
+    /**
+     * Catálogo fechado: administração seleciona campos conhecidos, sem inventar
+     * identificadores internos nem permitir ações SQL via formulário.
+     * @return array<string,array{label:string,type:string,prompt:string}>
+     */
+    public static function suggestedQuestions(): array
+    {
+        return [
+            'contact_phone' => [
+                'label' => 'Telefone de contato', 'type' => 'text',
+                'prompt' => 'Qual é o melhor telefone para contato?',
+            ],
+            'patient_age' => [
+                'label' => 'Idade de quem será atendido', 'type' => 'text',
+                'prompt' => 'Qual é a idade da pessoa que receberá o atendimento?',
+            ],
+            'patient_name' => [
+                'label' => 'Nome de quem será atendido', 'type' => 'text',
+                'prompt' => 'Qual é o nome de quem receberá o atendimento?',
+            ],
+            'appointment_modality' => [
+                'label' => 'Modalidade desejada', 'type' => 'text',
+                'prompt' => 'Prefere atendimento presencial ou online?',
+            ],
+            'first_consultation' => [
+                'label' => 'Primeiro atendimento', 'type' => 'text',
+                'prompt' => 'Será sua primeira consulta conosco?',
+            ],
+        ];
+    }
+
     /** @param array<string,mixed> $current @param array<string,mixed> $input @return array<string,mixed> */
     public function compile(array $current, array $input): array
     {
@@ -89,6 +120,62 @@ final class VisualBlueprintEditorService
         unset($field);
         if (array_diff(array_keys($updates), array_keys($known)) !== []) {
             throw new InvalidArgumentException('O formulário contém uma pergunta que não pertence a este modelo.');
+        }
+
+        // Inclusões guiadas: apenas campos do catálogo, sem exclusão automática
+        // de dados pré-existentes ou alteração silenciosa de regras customizadas.
+        $suggestions = $input['suggested_questions'] ?? [];
+        if (!is_array($suggestions) || count($suggestions) > count(self::suggestedQuestions())) {
+            throw new InvalidArgumentException('Seleção de perguntas adicionais inválida.');
+        }
+        $catalog = self::suggestedQuestions();
+        $added = [];
+        foreach ($suggestions as $candidate) {
+            if (!is_string($candidate) || !array_key_exists($candidate, $catalog)) {
+                throw new InvalidArgumentException('Uma das perguntas adicionais não é permitida.');
+            }
+            if (isset($known[$candidate]) || isset($added[$candidate])) {
+                continue;
+            }
+            $added[$candidate] = true;
+            $option = $catalog[$candidate];
+            $config['triage_fields'][] = [
+                'key' => $candidate,
+                'label' => $option['label'],
+                'type' => $option['type'],
+                'prompt' => $option['prompt'],
+                'required_before_schedule' => true,
+                'required_for_completion' => true,
+                'position' => (count($config['triage_fields']) + 1) * 10,
+            ];
+        }
+        if (count($config['triage_fields']) > 40) {
+            throw new InvalidArgumentException('O modelo pode solicitar no máximo 40 informações.');
+        }
+        if ($added !== []) {
+            $steps = $config['workflow'];
+            $insertAt = count($steps);
+            foreach ($steps as $index => $step) {
+                if (is_array($step) && in_array((string) ($step['type'] ?? ''), ['action', 'handoff', 'complete'], true)) {
+                    $insertAt = $index;
+                    break;
+                }
+            }
+            $newSteps = [];
+            foreach (array_keys($added) as $key) {
+                $newSteps[] = [
+                    'key' => 'collect_' . $key,
+                    'label' => 'Coletar: ' . $catalog[$key]['label'],
+                    'type' => 'collect',
+                    'config' => ['field_keys' => [$key]],
+                ];
+            }
+            array_splice($steps, $insertAt, 0, $newSteps);
+            foreach ($steps as $index => &$step) {
+                if (is_array($step)) $step['position'] = ($index + 1) * 10;
+            }
+            unset($step);
+            $config['workflow'] = $steps;
         }
 
         // Não reordena o fluxo quando ele já está na configuração segura.

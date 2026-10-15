@@ -117,6 +117,8 @@ if (Auth::check() && !Auth::isSuperAdmin() && Auth::tenantId()) {
     }
 }
 $pageHelp = (new PageHelpService())->forPath($_SERVER['REQUEST_URI'] ?? '/', Auth::isSuperAdmin());
+// Escopo explícito da harmonização visual: não modifica telas de infraestrutura.
+$businessDesign = preg_match('~/(?:onboarding|agents|agent-blueprints|conversations|queue|contacts|crm|calendar|tasks|reports)(?:/|$)~', $currentPath) === 1;
 
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
@@ -193,6 +195,7 @@ $svgIcon = static function (string $name): string {
     <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1&rev=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-ui-harmony.css?v=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets) || !empty($activationAssets) || !empty($blueprintAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-activation-unified.css?v=20261014b')) ?>"><?php endif; ?>
+    <?php if ($businessDesign): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-business-unified.css?v=20261015a')) ?>"><?php endif; ?>
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -362,7 +365,7 @@ $svgIcon = static function (string $name): string {
     </aside>
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Fechar menu"></button>
 
-    <main class="main-content" id="main-content" tabindex="-1">
+    <main class="main-content<?= $businessDesign ? ' rs-business-unified' : '' ?>" id="main-content" tabindex="-1">
         <header class="topbar topbar-v36181">
             <a class="topbar-home" href="<?= View::e(Router::url('/')) ?>" aria-label="Ir para o início"><?= $svgIcon('dashboard') ?></a>
             <div class="topbar-title-block">

@@ -3,8 +3,9 @@ b120bf9aab24a7af2508366edfdd491c9fbf1e84aa8a6813071e7e879fcc713f  ./.env.example
 8abd9ed4a24a60e4b826614c347ab57bfe1f332f0bd2bec12353aaa4d4787c64  ./.env.local.example
 6f6304859390dbc16f455473253ce2a34a9b3a5ba1991b947954dc75aaa812f7  ./.env.vps.example
 515746cb32b412abe48d68d41108b11ae38b7c4d542fbccc0d149403c89da124  ./.gitignore
-4d13f97d4c45b06e4caf93b234f51dbfcf0749b9b495118af159f8eb475280d3  ./CHANGELOG.md
+f5d952707b8e21698b85b5f6d0b24c17a6cd859c2ced561d5205bd465f7a7a02  ./CHANGELOG.md
 96ee8942f836814a6cdd3f426900090682506ced66aeb37510b50d13a65ea03b  ./Dockerfile
+ca4229444f6d9f4f8b4d3441ca04342cc209a76c70fe7c6354d369f2c49556b3  ./EVOLUCAO_20261015_LEIA_PRIMEIRO.txt
 0034176ed7e17bb34371f40f17c94955f9884c01903d46a7c0e7ba1b05f2437b  ./FASE1_LEIA_PRIMEIRO.txt
 cf114e30daa45c87dfd1075ee7b9cfc9da35da7aef99e16eb0aab1e28a766bd3  ./FASE3_LEIA_PRIMEIRO.txt
 cf09ab5982d08ba89f141b97eac172fd3e06c143c6406ed1a46f17bfc4fba3b6  ./FASE4_LEIA_PRIMEIRO.txt
@@ -12,11 +13,12 @@ cf09ab5982d08ba89f141b97eac172fd3e06c143c6406ed1a46f17bfc4fba3b6  ./FASE4_LEIA_P
 3ed73c81b23eec197641e2bb0b29845e55963b516a3e0b60987d75a10e070737  ./HOTFIX_CREDENCIAL_LEIA_PRIMEIRO.txt
 eb5ff9d064d10e356e8cdeee97f37dc5ea1a1fb3649e77b45a0c14431dc23b3b  ./HOTFIX_LEIA_PRIMEIRO.txt
 f60269a9e880e96ca08872bac0ce075a57722d24e2ec98f5e2f36ff38eed8442  ./README.md
+f091cb6b758a4a60dac76af87450772f71695ed631e37a1e7bd9cb2b42ad9f78  ./UNIFICACAO_20261014_LEIA_PRIMEIRO.txt
 ce7249f53b73b4347f0db1bf484321162a24877aca6e7106d85afd34365ab179  ./app/Controllers/AccessController.php
 64dc9574317cd81b08f9669533f2b8cf57d8a8ba305760158a7ecff6dee51433  ./app/Controllers/AdminCrmController.php
-7a964baf4c3563146b922fd9fd3cea227dff01727aa798b8afacbf65cddf8894  ./app/Controllers/AgentBlueprintController.php
+3d206ec01177e092beb52442c93c2abba6ee4823994df34d8edf413b398fcdf6  ./app/Controllers/AgentBlueprintController.php
 7841182cdc2137c5fed3cc610ba9bbdbdca998dd982394df42f6ade36aff13ff  ./app/Controllers/AgentBusinessSimulationController.php
-eb40a5641dbfc8fc525e772cfed4c38930fa939599728d13ddb8e27ca1013084  ./app/Controllers/AgentController.php
+89c6adf4b75d4323937661107e5b4ac96f2ba56a4c04ae4b6d86552828649c2a  ./app/Controllers/AgentController.php
 bb92e41c7c35538e25599f2400eab9ac10c6dd90206ad9b1b750a76c9f5126d3  ./app/Controllers/AgentReadinessController.php
 fd7b834385f0cdab9f86f4490f05a235ae83d9bbf0324fd33faa7067d239200e  ./app/Controllers/AgentTestController.php
 67b5e8c1f5641032eafaae05168db409a71fc2aab4667fb3238be2ce89b7630a  ./app/Controllers/AiCommercialAttentionController.php
@@ -49,7 +51,7 @@ cb0f0456616dcae0fd385642dc0393ec3d6f0d10a922ddf81e4670bfff5f1e98  ./app/Controll
 caedf5f069541ba2df051f4d85477af3c4d82b32e0d62092b4bc5b02b52194ee  ./app/Controllers/N8nFlowController.php
 18e1369b1e63fb6a96258359ee2cd3e1f66cb386892fa790d95c8e70c0b505a3  ./app/Controllers/N8nTemplateController.php
 08fecf1485818334bf9ac1dee6c76195e234d136b8b15a8aa1e2be3b25232a6b  ./app/Controllers/NotificationsController.php
-9c6e062d14efafbfa8f3cb84d15541e056a49dae71af86298a2160c89851b60e  ./app/Controllers/OnboardingController.php
+af0326d77f23922d39c94577343ff21a7568ce13c9e6b5e3e2abcb1f1884d299  ./app/Controllers/OnboardingController.php
 632a2d35103a202853c9e809ea3a886be635777339f3518e6d18dda2ca4e095d  ./app/Controllers/OpenAiUsageController.php
 87a2899f7803811e46cf9bf8429f629f38220ea07629ce3eb7184ab9388cbc10  ./app/Controllers/OperationalAlertsController.php
 0eefd5bbcc445d2252f1fa91db071509d8d15ef39e1a531f3c12e1cb5a4516d0  ./app/Controllers/OperationalLoadController.php
@@ -208,12 +210,13 @@ d2eaceb3c6d09cd850676062554229147f3d390506f1bfb44e7e4471130d42f0  ./app/Services
 2dd2693645f7f73ff01623899848c79d83b3ed740963c4c1e167c446591e9d80  ./app/Services/TenantMetricsService.php
 f4b7f5309acfce276023373e8f189808ef1cd51a7bc73598a4d913a36272c88a  ./app/Services/TenantModuleService.php
 ec861528deaace2a81cb1def4edcff586a91ad738435498348cd581ea3826799  ./app/Services/TenantSelfHealingService.php
+252775fdf1ed9a95e852156b95a922a43694609e9215e4f3fa591cfddbeacd26  ./app/Services/VisualBlueprintEditorService.php
 48c288605c955126ad10418dee3ac314a849e8241ae05580990d3d5159528899  ./app/Services/WebhookSecurityService.php
 a9c1a964716f99f65e0d1ff43662a0471881c6dcc4f25d837d5bfc64dde8a10e  ./app/Validation/ExpressOnboardingRequest.php
 226154fe9205e3141fa1db90492ee8d0dd15e48f8cf1ec6e5f5dd956986eef2d  ./app/Validation/ExpressValidationException.php
 e52bc6f57c62684cbfedd567491a121fbd458db932b81cebdfd57a14e8ee9e9c  ./app/Views/access/restricted.php
-ce00a338321692dd3d319c209f3ed9af6da1c94e93daec1b8d257901b55c7bcb  ./app/Views/agent_blueprints/index.php
-4ba2b659b4e25f4be3fcdb16e8847722398bdadd43cce31b65ef451152487811  ./app/Views/agent_express/index.php
+ecd2744845091aa3ce6d83a3724d9afa79cabf2e9668f5172222f6a3e272d23b  ./app/Views/agent_blueprints/index.php
+f538422b4f67fe7f78610d7f601a1d5bdfa17465777c30826b5766c08fe36d3c  ./app/Views/agent_express/index.php
 247cb55f2fd928992e389a95a1cf0cf2d5860ad1d3a0a40387210fcd3785515d  ./app/Views/agent_tests/index.php
 de4fc42d8f4a61f028d58df7f001f5e79452f44f2955e6632fa08233a7f201e5  ./app/Views/agents/business.php
 025fcc6ac3e6c60a470a3828af894f41b1834742ab7ea62c12f332e2f17bf566  ./app/Views/agents/index.php
@@ -253,7 +256,7 @@ c73c9ff89ae867198446a710527246fbff87ffa8f8a5172b88ae1b5e5e8d9340  ./app/Views/im
 7e19130c45f5d8359aa971fdd4818bc799fcb42cc6e5bc9853c6ac1c268217b1  ./app/Views/instances/_client.php
 dc9743c6b0aedf080724becc18387f9e897c42e7e37e72c7ae5bfb99b18e0ff6  ./app/Views/instances/_routing.php
 14e8838dc79320bcd7bd9caf72e3e0fb96ea7b0b62b05a039f0c56d4cc05c387  ./app/Views/instances/index.php
-bc36cac4965c9a21c1a615e646675a6ff136c248d62e53c6c431eee5977104ba  ./app/Views/layouts/app.php
+169fbe6532e8f3faedae2fd83c33ef3ea34277d3f3580cdd0780269a8316f4bb  ./app/Views/layouts/app.php
 862b0818fb7d5b1196bbb6af633fb1f660f45191d01f383bd1baf3c13981e25c  ./app/Views/layouts/guest.php
 200a6495f25492dad76312e352d13133b5fc97993147bc373b64a7e58ce3dc64  ./app/Views/layouts/restricted.php
 c2dd3e3877988cd66431f00b18714186ba6323196537b5e43b0895ed4836a241  ./app/Views/n8n_flows/_nav.php
@@ -262,7 +265,7 @@ c2dd3e3877988cd66431f00b18714186ba6323196537b5e43b0895ed4836a241  ./app/Views/n8
 704ce617cf5a1b73834d566fb520ca466a201004a2557acfbb1a55c1353343b5  ./app/Views/n8n_templates/index.php
 bf47b76292d42c24b7ee8668e0fd63fed39e7d86ee169c348e62552f9461ed26  ./app/Views/notifications/index.php
 8b3f27c3a2c226034c911d47cc162511ffb5b4112ccbafb31e2fdf6018e1b097  ./app/Views/notifications/settings.php
-0512110703992e8e6a9cc698a7aef21d59e8e8cd137ee4ec9949e8c07f057615  ./app/Views/onboarding/index.php
+f950d7715225272e1a0f6d4ae631d140ac4df7b4f180c1d9cdd9e251aadd5dcf  ./app/Views/onboarding/index.php
 bd165f0c200e7a043e4d2ad7383c5dad134780a29d5fcfdec7404ca73f91e0df  ./app/Views/openai_usage/index.php
 3b4b59699daa6c97f38fb0585441ddc1a3e24fb053b87742a561448b57b6d330  ./app/Views/operational_load/index.php
 f81819d6328e0020f5a5f2a758d8e695aba63abd8920764e9c7b9d01c5b4e63d  ./app/Views/operations/ai_reprocess.php
@@ -526,6 +529,7 @@ bbfa58bb091cdb638bb906a1d44fed3dc695a15211aad524b223ac50eac55114  ./docs/AGENDA-
 6e6901095c63f95313e6a9c0bce20bf15c3118bcc61a5f40070b440141170206  ./docs/AGENDA-GOOGLE-ZIP-35.md
 bb1741698ed31646531003747271f1c07f8fb041127c29c1a511c375a6b2e362  ./docs/AI-REPROCESSAMENTO-AGENDADO.md
 077fabfeedd7f5698840ca7e68802478c8521e2b4a4eaf2051fe10253b38b51e  ./docs/ASAAS_WEBHOOK_ACCESS_VALIDATION.md
+bbbd6c68e9bc4faafce3e8e0c96ad9f008905860299130adc04d772459f39b78  ./docs/ATIVACAO_UNIFICADA_BLUEPRINTS_20261014.md
 311485b5163b0eb4278a8054b4aebd5e3272e16565818e9a83c570d83b8b8588  ./docs/ATUALIZACAO-v36.10.0.md
 69e9465dd5407f27363d6f4ec5fc770b6a7346b78524f54f487c618bce5a740f  ./docs/ATUALIZACAO-v36.10.2.md
 5ef860f3d5a5b2f2bd0bb06e377e192206f209ec22820ad91decacbdbaf70038  ./docs/ATUALIZACAO-v36.10.3.md
@@ -663,6 +667,7 @@ a7555ed40db98a10e8232a462335b67e89d5472d92b1ec33a2545ce872cb209b  ./docs/ATUALIZ
 4fa998744b1c0ec330cacdf31be2e58ad846ee585bd8135ebd550bfb0e2a940f  ./docs/ATUALIZACAO-v36.9.0.md
 d9a17d3be2cfd950a8200d46cde1ba084d42c50c5a3135af92fe13d3adc575e7  ./docs/ATUALIZACAO-v36.9.1.md
 0fa3a5c81544b3234aafc6345b62237a25a18b8f16be39b0f6412a3974586ab6  ./docs/CONTRATO-WEBHOOKS.md
+0b7499090abd7863bf10b0f08b480ad4cb52f96dc452b3e559ae55453d9e200c  ./docs/EVOLUCAO_LAYOUT_E_BLUEPRINTS_20261015.md
 9325d67d94a82587fd704f3dcfefc3b6a5fa119ef6392e6c7eeb3f94b79336e8  ./docs/FASE1_CONFIGURACAO_EXPRESSA_BACKEND.md
 4aacac64dd998d57fb1556221398c75d2fb990394bba83a65ed1e4227125b88f  ./docs/FASE2_VALIDADOR_PRONTIDAO.md
 455eeec11d6ffe81cd634b3aca7358fa61d73d9d0a7a7d8c840688802b90af0d  ./docs/FASE3_WIZARD_PRONTIDAO_FRONTEND.md
@@ -813,6 +818,8 @@ c835b907d8eb7381a72224cfdc8b688ffbb9a7676f4f05f7bc84d18c4f61324e  ./public/.htac
 607aa84730147dbdc91d514be53a615e3896581af84ac20a9215156bdae0d564  ./public/assets/css/agent-ui-harmony.css
 d4f83e4ee1fc74679deadc74ab74b063c90e99f0014d9661998796359f58afa2  ./public/assets/css/app.css
 a379eaa195764145459de3cd9172ea3ad08668586cb97b0377181b0cbf70a5bc  ./public/assets/css/reports.css
+d094358027edddd50258134a5275809037032668db05068bbbefc6618c6302c8  ./public/assets/css/rs-activation-unified.css
+450d96275994a1e186e7774c4a4c6d032bbd105304bac78d9bf7cfd007ae2504  ./public/assets/css/rs-business-unified.css
 eb9bc52f13a9bd152bfa27d7c522830ec59fdc580dd043a293531392c628cd70  ./public/assets/img/RS_Connect_horizontal_transparente.png
 8845f4643d846dc948141fb4de0df0bc1bb98124bf74913e664c792d1b2c07ab  ./public/assets/img/RS_Connect_horizontal_vetor.svg
 21daa1fe458991b72d42704ec590cd59e7fdddb11991a0f9f402e3a065c133d2  ./public/assets/img/RS_Connect_vertical_transparente.png
@@ -847,7 +854,10 @@ e71c859b2d333cbb63db5f588a3753bbe81a07ad6673046ecf1112804d111887  ./scripts/rsco
 eb0d953e813962fd22ce9a78808b0d61ead079807de5bf35bf05286f7c31421b  ./scripts/verify-deploy-hardening.sh
 45b4c06dee1bc07abd19d1bf415c98369a3db38a12a10c63d6f91501fd9780c1  ./storage/README-APLICACAO.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/.gitkeep
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/app/white-label/.gitkeep
 0a0dac2ccf941d5650017de17788c4d8f72accb65801ef08d18cc491530e9a7f  ./storage/apply-white-label-company-brand.sh
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/cache/.gitkeep
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./storage/logs/.gitkeep
 72a48a02d968f194678cbda5e01aacedb229c60529efe55d48154f04c934fa90  ./tests/Contract/Fixtures/agent-policy-reliability-scenarios.json
 65e10c5121a88c6831503e6789ed136820f0a2e3e153bd7073e5110eda92b58c  ./tests/Contract/Fixtures/ai-metrics-accounting-scenarios.json
 d50b1524f01927464f7a65ee70971650a6e746bdb587fd8944a5662175eea2ee  ./tests/Contract/Fixtures/ai-quota-template-validation-scenarios.json
@@ -877,6 +887,7 @@ d23311ae5f79a75e85f12f4747de5e28b5e72e5d2b051a1de0ee77d75038790c  ./tests/Contra
 93dc80609551b9d2930c6c8a9d5def31433151251c60744d424a3dc64a04c3d8  ./tests/Contract/Fixtures/payment-external-webhook.json
 88d60a9d624d8bfcf2c6247c8e8845b39c3b85486249e5a8986a88ae86c108d7  ./tests/Contract/Fixtures/usage-menu-notifications-scenarios.json
 5f76bbc281c92f00c29d2b004bca8d769b59c2767521d6b00f7a9627d895f6aa  ./tests/Contract/Fixtures/webhook-messages-upsert.json
+6df73ba10b323b419bf7af30790af789a6e733cd547f2f133d50527b7c182ee3  ./tests/Feature/activation-unification-and-blueprint-visual-oct2026-smoke.php
 69571f25ebafaeb771a27ba1c806e218cd83ebd55c40e6531fad1c4a6d99f5bf  ./tests/Feature/admin-company-sla-optional-v363615-smoke.php
 ff3a5aca07a6cf186c1fd44a164a9dec8edb4494206391a9a170bce4b90f27b6  ./tests/Feature/admin-company-sla-v363613-smoke.php
 87d74696d990ef1256d1d59ed95cf1b4a5c1db7d118c1ce534a957e85a2ae3b3  ./tests/Feature/admin-executive-report-v36140-smoke.php
@@ -951,6 +962,7 @@ b27df2fa981a031aac0ec38248e4ac0c1644ab140228b6e088e7814d7004a074  ./tests/Featur
 f96d732c72ddc8060359ca6a670fca0e3a4c1c7d7f11dc391b9eaf3383e20d0d  ./tests/Feature/backup-dispatch-retry-smoke.php
 a3a3cc9e064c5e1976ec343e1bff4db49100c9a36d875daead7e3638ed819669  ./tests/Feature/backup-restore-verification-smoke.php
 84b4cceda4c863296550bc5fca057572bcd9e9b5cf39bcb9046226f02d967e23  ./tests/Feature/billing-plan-pricing-v362011-smoke.php
+a4e2d81185401efd52007376a07b18acb783bed361863dfdce2b2d1c469b3d99  ./tests/Feature/business-design-and-blueprint-suggestions-oct2026-smoke.php
 f50634314398322fc567e50b792485f2f43c1e974f9de157da260a1100a42232  ./tests/Feature/business-hours-ai-authority-v36344-smoke.php
 d864fbbf7051aeebd53d43e81676f9e841dc7a8f3b95e03c421e3305ea960481  ./tests/Feature/business-hours-compact-v36343-smoke.php
 7abe4029f1aabbcb69db9053320d94f67d3d3bb8f42c048b93e3905e17efd00f  ./tests/Feature/business-hours-global-authority-v36415-smoke.php

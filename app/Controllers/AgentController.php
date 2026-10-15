@@ -162,7 +162,7 @@ final class AgentController
         }
 
         View::render('agents.index', [
-            'title' => 'Assistentes de IA',
+            'title' => Auth::isSuperAdmin() ? 'Assistentes cadastrados' : 'Meu atendimento',
             'agents' => $agents,
             'instances' => $instances,
             'companyProfile' => $companyProfile,

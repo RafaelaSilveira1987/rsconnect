@@ -243,6 +243,21 @@ $modeLabels = [
                                         <?php endforeach; ?>
                                         </div>
                                     <?php endif; ?>
+                                    <?php
+                                    $suggestedQuestions = \App\Services\VisualBlueprintEditorService::suggestedQuestions();
+                                    $configuredKeys = array_map(static fn ($field): string => is_array($field) ? (string) ($field['key'] ?? '') : '', $fields);
+                                    ?>
+                                    <div class="rs-model-section-title"><strong>Adicionar perguntas recomendadas</strong><small>Marque as informações que este modelo também deve solicitar. As já incluídas são preservadas e podem ter sua redação editada acima.</small></div>
+                                    <div class="rs-model-suggestions">
+                                        <?php foreach ($suggestedQuestions as $suggestedKey => $suggestion): ?>
+                                            <?php $alreadyIncluded = in_array($suggestedKey, $configuredKeys, true); ?>
+                                            <label class="rs-model-toggle rs-model-suggestion<?= $alreadyIncluded ? ' is-included' : '' ?>">
+                                                <span><strong><?= View::e($suggestion['label']) ?></strong><small><?= View::e($alreadyIncluded ? 'Já faz parte deste modelo.' : $suggestion['prompt']) ?></small></span>
+                                                <input type="checkbox" name="suggested_questions[]" value="<?= View::e($suggestedKey) ?>" <?= $alreadyIncluded ? 'checked disabled' : '' ?> aria-label="Adicionar <?= View::e($suggestion['label']) ?>">
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p class="rs-model-empty">Essas perguntas entram antes da consulta à agenda. O modelo publicado não altera automaticamente empresas já implantadas.</p>
                                     <label class="field"><span>Identificação da nova versão (opcional)</span><input class="form-control" name="version_label" maxlength="70" placeholder="Ex.: 2.0"></label>
                                     <div class="rs-model-safety-note">Publicar atualiza o padrão para novas aplicações. Empresas já configuradas não serão alteradas.</div>
                                     <button class="btn btn-primary" type="submit">Publicar modelo revisado</button>

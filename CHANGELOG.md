@@ -1,3 +1,12 @@
+## 2026-10-15 — Harmonização visual dos módulos de negócio e perguntas guiadas nos Blueprints
+
+- Estende a linguagem visual de “Meu atendimento” aos módulos de negócio mais acessados, por stylesheet isolado por rota.
+- Preserva controles de busca, componentes críticos e as regras operacionais de agenda, fila e atendimento.
+- No editor de modelos RS, permite incluir cinco campos de triagem de um catálogo fechado e acrescenta suas etapas de coleta antes da agenda.
+- Sem exclusão automática de campos, sem ativação silenciosa e sem aplicação retroativa em empresas existentes.
+- Altera título da tela de agentes para “Meu atendimento” no perfil de cliente.
+- Testes e limites descritos em `docs/EVOLUCAO_LAYOUT_E_BLUEPRINTS_20261015.md`.
+
 ## 2026-10-14 — Painel de Negócios /agents (entrega frontend)
 
 - Tela de empresa em `/agents` substituída por configurações fechadas, FAQ, canais, prontidão e simulador lado a lado.
