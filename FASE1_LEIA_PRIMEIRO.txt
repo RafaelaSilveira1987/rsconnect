@@ -1,0 +1,11 @@
+RS CONNECT — FASE 1: BACK-END DE CONFIGURAÇÃO EXPRESSA
+=====================================================
+
+1) LEIA docs/FASE1_CONFIGURACAO_EXPRESSA_BACKEND.md.
+2) NOVO ENDPOINT: POST /api/agents/express, sessão autenticada e X-CSRF-TOKEN.
+3) REUTILIZA as tabelas/migrations atuais. Nenhuma migration nova.
+4) Use APENAS após revisão dos dados pelo usuário: a rota APLICA configuração no banco.
+5) A versão atual da aplicação é PHP 8.2+/PDO, não Laravel. Adaptadores Laravel estão em app/Http/.
+6) Teste automatizado: php tests/Feature/express-onboarding-phase1-smoke.php
+7) Validação de código realizada, mas teste real com DB/WhatsApp deve ser feito em homologação.
+8) Faça backup antes de implantar em VPS. Não houve alteração no BD deste ambiente.

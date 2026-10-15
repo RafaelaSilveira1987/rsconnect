@@ -58,6 +58,7 @@ final class OnboardingController
 
         View::render('onboarding.index', [
             'title' => 'Ativação Assistida',
+            'activationAssets' => true,
             'company' => $company,
             'instances' => $instances,
             'agents' => $agents,

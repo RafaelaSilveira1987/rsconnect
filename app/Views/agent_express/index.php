@@ -16,10 +16,10 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
      data-instances-url="<?= View::e(Router::url('/instances')) ?>">
     <script type="application/json" id="rexData"><?= json_encode(['payload'=>$setupPayload, 'agents'=>$setupAgents, 'has_saved'=>$setupHasSaved], $jsonFlags | JSON_THROW_ON_ERROR) ?></script>
     <div class="rex-heading">
-        <div><div class="rex-eyebrow">RS CONNECT <span aria-hidden="true">/</span> CONFIGURAÇÃO RÁPIDA</div>
+        <div><div class="rex-eyebrow">ATIVAÇÃO ASSISTIDA <span aria-hidden="true">/</span> CONFIGURAÇÃO DO ATENDIMENTO</div>
         <h2>Vamos preparar seu atendimento</h2>
         <p>Você conta como sua empresa funciona. O restante fica por nossa conta.</p></div>
-        <div class="rex-head-actions"><?php if (!empty($setupHasSaved)): ?><button class="rex-button rex-button-subtle" type="button" id="rexOpenDashboard">Ver prontidão</button><?php endif; ?><a class="rex-back-link" href="<?= View::e(Router::url('/onboarding')) ?>">← Voltar à implantação</a></div>
+        <div class="rex-head-actions"><?php if (!empty($setupHasSaved)): ?><button class="rex-button rex-button-subtle" type="button" id="rexOpenDashboard">Ver prontidão</button><?php endif; ?><a class="rex-back-link" href="<?= View::e(Router::url('/onboarding')) ?>">← Voltar à Ativação Assistida</a></div>
     </div>
     <div class="rex-stepbar" role="navigation" aria-label="Etapas da configuração">
         <button class="rex-step is-active" type="button" data-step-link="0" aria-current="step"><span>1</span> Sua empresa</button>

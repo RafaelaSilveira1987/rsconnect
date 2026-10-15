@@ -31,7 +31,7 @@ $modeLabels = [
     <section class="agent-model-concepts" aria-label="Partes do modelo de atendimento">
         <article>
             <span class="agent-model-concept-icon">01</span>
-            <div><strong>Jeito de falar</strong><small>O Prompt Studio cuida do tom, personalidade e forma de responder.</small></div>
+            <div><strong>Jeito de falar</strong><small>O modelo sugere como conversar; cada empresa personaliza o tom na própria configuração.</small></div>
         </article>
         <article>
             <span class="agent-model-concept-icon">02</span>
@@ -116,7 +116,7 @@ $modeLabels = [
             <div>
                 <span class="eyebrow">Padrões prontos</span>
                 <h2>Modelos de atendimento por segmento</h2>
-                <p>O modelo é o ponto de partida. Quando aplicado a uma empresa, ela recebe uma cópia própria das regras.</p>
+                <p>Escolha um modelo, ajuste suas regras com os controles visuais e publique uma nova versão. Cada empresa mantém suas próprias personalizações.</p>
             </div>
             <details class="agent-model-add-details">
                 <summary class="btn btn-secondary">Novo modelo</summary>
@@ -204,22 +204,61 @@ $modeLabels = [
                                 </form>
                             </details>
 
-                            <details class="agent-model-edit-details agent-model-version-details">
-                                <summary>Criar nova versão</summary>
+                            <details class="agent-model-edit-details agent-model-version-details rs-model-edit">
+                                <summary>Configurar modelo</summary>
                                 <form method="post" action="<?= View::e(Router::url('/agent-blueprints/version')) ?>" class="agent-model-inline-form compact">
                                     <?= Csrf::input() ?>
                                     <input type="hidden" name="blueprint_id" value="<?= (int) $blueprint['id'] ?>">
-                                    <label class="field"><span>Nome da versão</span><input class="form-control" name="version_label" placeholder="Ex.: 1.1"></label>
-                                    <label class="field"><span>Orientação para o jeito de conversar</span><textarea class="form-control" name="prompt_guidance" rows="3" placeholder="Regras complementares para o Prompt Studio."><?= View::e((string) ($blueprint['current_prompt_guidance'] ?? '')) ?></textarea><small>Use este campo para tom e condução da conversa. As regras de segurança continuam protegidas pelo sistema.</small></label>
-                                    <details class="agent-model-technical-details">
-                                        <summary>Configuração avançada do modelo</summary>
-                                        <p class="agent-model-technical-warning">Esta área é técnica. Altere somente se souber exatamente o efeito da mudança.</p>
-                                        <label class="field"><span>Configuração interna (JSON)</span>
-                                            <textarea class="form-control agent-model-json" name="config_json" rows="22" spellcheck="false" required><?= View::e((string) ($blueprint['current_config_pretty'] ?? '{\n  "interaction_mode": "hybrid",\n  "capabilities": {},\n  "triage_fields": [],\n  "policies": [],\n  "workflow": []\n}')) ?></textarea>
-                                        </label>
-                                    </details>
-                                    <div class="message-info"><strong>Empresas atuais ficam protegidas</strong><span>Publicar uma nova versão não muda automaticamente as empresas que já estão usando este modelo.</span></div>
-                                    <button class="btn btn-primary" type="submit">Publicar nova versão</button>
+                                    <input type="hidden" name="editor_mode" value="visual">
+                                    <input type="hidden" name="base_version_id" value="<?= (int) ($blueprint['current_version_id'] ?? 0) ?>">
+                                    <div class="rs-model-section-title"><strong>Forma de conversar</strong><small>Selecione a maneira como o atendimento deve conduzir as perguntas.</small></div>
+                                    <label class="field"><span>Ritmo do atendimento</span>
+                                        <select class="form-control" name="interaction_mode" required>
+                                            <option value="hybrid" <?= $mode === 'hybrid' ? 'selected' : '' ?>>Conversa natural com regras</option>
+                                            <option value="form" <?= $mode === 'form' ? 'selected' : '' ?>>Perguntas guiadas, uma por vez</option>
+                                            <?php if ($mode === 'prompt'): ?><option value="prompt" selected>Estilo anterior (manter sem mudanças)</option><?php endif; ?>
+                                        </select>
+                                    </label>
+                                    <div class="rs-model-section-title"><strong>Agenda</strong><small>Novas reservas devem depender de autorização da equipe.</small></div>
+                                    <input type="hidden" name="calendar_pre_schedule" value="0">
+                                    <label class="rs-model-toggle"><span><strong>Permitir solicitar agendamento</strong><small>A equipe aprova antes da confirmação; o sistema consulta vagas reais.</small></span>
+                                        <input type="checkbox" name="calendar_pre_schedule" value="1" <?= !empty($capabilities['calendar.pre_schedule']) ? 'checked' : '' ?> aria-label="Permitir solicitar agendamento">
+                                    </label>
+                                    <div class="rs-model-safety-note">A confirmação automática não é habilitada por este editor. Horários, capacidade e aprovação específica são configurados na empresa.</div>
+                                    <div class="rs-model-section-title"><strong>Perguntas iniciais</strong><small>Edite a forma de perguntar. Marque as informações obrigatórias antes de consultar a agenda.</small></div>
+                                    <?php if ($fields === []): ?>
+                                        <p class="rs-model-empty">Ao publicar, o sistema criará duas perguntas iniciais: nome e motivo do contato.</p>
+                                    <?php else: ?>
+                                        <div class="rs-model-question-list">
+                                        <?php foreach ($fields as $field): ?>
+                                            <?php if (!is_array($field) || (string) ($field['key'] ?? '') === '') continue; ?>
+                                            <?php $key = (string) $field['key']; ?>
+                                            <div class="rs-model-question">
+                                                <label class="field"><span><?= View::e((string) ($field['label'] ?? $key)) ?></span>
+                                                    <input class="form-control" name="questions[<?= View::e($key) ?>][prompt]" value="<?= View::e((string) ($field['prompt'] ?? '')) ?>" required maxlength="600">
+                                                </label>
+                                                <input type="hidden" name="questions[<?= View::e($key) ?>][required_before_schedule]" value="0">
+                                                <label class="rs-model-checkbox"><input type="checkbox" name="questions[<?= View::e($key) ?>][required_before_schedule]" value="1" <?= !empty($field['required_before_schedule']) ? 'checked' : '' ?>> Necessária antes da agenda</label>
+                                            </div>
+                                        <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <label class="field"><span>Identificação da nova versão (opcional)</span><input class="form-control" name="version_label" maxlength="70" placeholder="Ex.: 2.0"></label>
+                                    <div class="rs-model-safety-note">Publicar atualiza o padrão para novas aplicações. Empresas já configuradas não serão alteradas.</div>
+                                    <button class="btn btn-primary" type="submit">Publicar modelo revisado</button>
+                                </form>
+                            </details>
+
+                            <details class="agent-model-edit-details agent-model-version-details rs-model-advanced">
+                                <summary>Configuração avançada do modelo</summary>
+                                <form method="post" action="<?= View::e(Router::url('/agent-blueprints/version')) ?>" class="agent-model-inline-form compact">
+                                    <?= Csrf::input() ?>
+                                    <input type="hidden" name="blueprint_id" value="<?= (int) $blueprint['id'] ?>">
+                                    <label class="field"><span>Nome da versão</span><input class="form-control" name="version_label" maxlength="70" placeholder="Ex.: 2.1"></label>
+                                    <label class="field"><span>Orientação complementar de conversa</span><textarea class="form-control" name="prompt_guidance" rows="3"><?= View::e((string) ($blueprint['current_prompt_guidance'] ?? '')) ?></textarea></label>
+                                    <label class="field"><span>Configuração interna (JSON)</span><textarea class="form-control agent-model-json" name="config_json" rows="15" spellcheck="false" required><?= View::e((string) (($blueprint['current_config_pretty'] ?? '') ?: '{"interaction_mode":"hybrid","capabilities":{},"triage_fields":[],"policies":[],"workflow":[]}')) ?></textarea></label>
+                                    <p class="agent-model-technical-warning">Somente para administração técnica. Essa edição altera regras operacionais e deve ser homologada antes de ser aplicada a empresas.</p>
+                                    <button class="btn btn-secondary" type="submit">Publicar versão avançada</button>
                                 </form>
                             </details>
                         </div>

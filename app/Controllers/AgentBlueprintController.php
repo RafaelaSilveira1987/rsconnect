@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\VisualBlueprintEditorService;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -58,6 +59,7 @@ final class AgentBlueprintController
 
         View::render('agent_blueprints.index', [
             'title' => 'Modelos de atendimento por segmento',
+            'blueprintAssets' => true,
             'niches' => $niches,
             'blueprints' => $blueprints,
         ]);
@@ -186,41 +188,63 @@ final class AgentBlueprintController
     public function publishVersion(): void
     {
         $blueprintId = max(0, (int) ($_POST['blueprint_id'] ?? 0));
-        $versionLabel = trim((string) ($_POST['version_label'] ?? ''));
+        $versionLabel = mb_substr(trim((string) ($_POST['version_label'] ?? '')), 0, 70);
+        $isVisual = ($_POST['editor_mode'] ?? '') === 'visual';
         $configRaw = trim((string) ($_POST['config_json'] ?? ''));
         $promptGuidance = trim((string) ($_POST['prompt_guidance'] ?? ''));
 
-        if ($blueprintId < 1 || $configRaw === '') {
-            Flash::set('error', 'Selecione o modelo e informe a configuração avançada.');
+        if ($blueprintId < 1 || (!$isVisual && $configRaw === '')) {
+            Flash::set('error', 'Selecione o modelo e informe a configuração.');
             $this->redirect('/agent-blueprints');
         }
 
-        try {
-            $config = json_decode($configRaw, true, 512, JSON_THROW_ON_ERROR);
-            if (!is_array($config)) {
-                throw new RuntimeException('A configuração avançada do modelo está em formato inválido.');
+        if (!$isVisual) {
+            try {
+                $config = json_decode($configRaw, true, 512, JSON_THROW_ON_ERROR);
+                if (!is_array($config)) {
+                    throw new RuntimeException('Estrutura inválida.');
+                }
+                $this->validateBlueprintConfig($config);
+            } catch (Throwable $exception) {
+                Flash::set('error', 'Configuração inválida: ' . $exception->getMessage());
+                $this->redirect('/agent-blueprints');
             }
-            $this->validateBlueprintConfig($config);
-        } catch (Throwable $exception) {
-            Flash::set('error', 'Configuração inválida: ' . $exception->getMessage());
-            $this->redirect('/agent-blueprints');
         }
 
         $pdo = Database::connection();
         try {
-            $blueprintStmt = $pdo->prepare('SELECT id, name FROM agent_blueprints WHERE id = :id LIMIT 1');
+            $pdo->beginTransaction();
+            // Bloqueia o registro do modelo enquanto calculamos a próxima versão.
+            $blueprintStmt = $pdo->prepare('SELECT id, name FROM agent_blueprints WHERE id = :id LIMIT 1 FOR UPDATE');
             $blueprintStmt->execute(['id' => $blueprintId]);
             $blueprint = $blueprintStmt->fetch(PDO::FETCH_ASSOC) ?: null;
             if (!$blueprint) {
                 throw new RuntimeException('Modelo de atendimento não encontrado.');
             }
 
-            $pdo->beginTransaction();
+            if ($isVisual) {
+                $currentStmt = $pdo->prepare(
+                    'SELECT id, config_json, prompt_guidance FROM agent_blueprint_versions
+                     WHERE blueprint_id = :id ORDER BY is_current DESC, version_no DESC, id DESC LIMIT 1'
+                );
+                $currentStmt->execute(['id' => $blueprintId]);
+                $current = $currentStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $expectedVersionId = max(0, (int) ($_POST['base_version_id'] ?? 0));
+                if ((int) ($current['id'] ?? 0) !== $expectedVersionId) {
+                    throw new RuntimeException('Outra versão foi publicada. Atualize a página antes de salvar para não sobrescrever alterações.');
+                }
+                $base = json_decode((string) ($current['config_json'] ?? ''), true);
+                $base = is_array($base) ? $base : [];
+                $config = (new VisualBlueprintEditorService())->compile($base, $_POST);
+                $this->validateBlueprintConfig($config);
+                // O modo visual não permite editar nem substituir o texto avançado.
+                $promptGuidance = (string) ($current['prompt_guidance'] ?? '');
+            }
+
             $versionStmt = $pdo->prepare(
                 'SELECT COALESCE(MAX(version_no), 0) + 1
                  FROM agent_blueprint_versions
-                 WHERE blueprint_id = :blueprint_id
-                 FOR UPDATE'
+                 WHERE blueprint_id = :blueprint_id'
             );
             $versionStmt->execute(['blueprint_id' => $blueprintId]);
             $versionNo = max(1, (int) $versionStmt->fetchColumn());
@@ -239,7 +263,7 @@ final class AgentBlueprintController
                 'blueprint_id' => $blueprintId,
                 'version_no' => $versionNo,
                 'version_label' => $versionLabel !== '' ? $versionLabel : ('v' . $versionNo),
-                'config_json' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'config_json' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
                 'prompt_guidance' => $promptGuidance !== '' ? $promptGuidance : null,
             ]);
             $versionId = (int) $pdo->lastInsertId();
@@ -249,19 +273,14 @@ final class AgentBlueprintController
                 'blueprint_id' => $blueprintId,
                 'version_id' => $versionId,
                 'version_no' => $versionNo,
+                'editor' => $isVisual ? 'visual' : 'advanced',
             ]);
-            Flash::set(
-                'success',
-                'Nova versão publicada. Ela será usada quando o modelo for aplicado novamente; empresas existentes não foram alteradas.'
-            );
+            Flash::set('success', 'Nova versão publicada: empresas existentes não são alteradas automaticamente.');
         } catch (Throwable $exception) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
+            if ($pdo->inTransaction()) $pdo->rollBack();
             error_log('[RS Connect][agent-blueprints] Falha ao publicar versão: ' . $exception->getMessage());
-            Flash::set('error', $exception instanceof RuntimeException
-                ? $exception->getMessage()
-                : 'Não foi possível publicar a nova versão do modelo.');
+            Flash::set('error', $exception instanceof RuntimeException || $exception instanceof \InvalidArgumentException
+                ? $exception->getMessage() : 'Não foi possível publicar a nova versão do modelo.');
         }
 
         $this->redirect('/agent-blueprints');

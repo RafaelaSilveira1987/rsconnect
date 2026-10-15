@@ -192,6 +192,7 @@ $svgIcon = static function (string $name): string {
     <?php if (!empty($expressAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-express.css?v=1&rev=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1&rev=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-ui-harmony.css?v=20261014')) ?>"><?php endif; ?>
+    <?php if (!empty($expressAssets) || !empty($businessDashboardAssets) || !empty($activationAssets) || !empty($blueprintAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-activation-unified.css?v=20261014b')) ?>"><?php endif; ?>
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -233,8 +234,7 @@ $svgIcon = static function (string $name): string {
             <a class="nav-link<?= $isActive('/') ?>" href="<?= View::e(Router::url('/')) ?>"><?= $svgIcon('dashboard') ?><span>Visão geral</span></a>
 
             <?php if (!Auth::isSuperAdmin() && Auth::can('onboarding.manage')): ?>
-                <a class="nav-link<?= $isActive('/onboarding') ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Ativação Assistida</span></a>
-                <a class="nav-link<?= $isActive('/onboarding/express') ?>" href="<?= View::e(Router::url('/onboarding/express')) ?>"><?= $svgIcon('agent') ?><span>Preparar atendimento</span></a>
+                <a class="nav-link<?= $isAnyActive(['/onboarding', '/onboarding/express']) ?>" href="<?= View::e(Router::url('/onboarding')) ?>"><?= $svgIcon('check') ?><span>Ativação Assistida</span></a>
             <?php endif; ?>
 
             <?php if ((Auth::can('conversations.view') && $moduleVisible('conversations')) || (Auth::can('queue.view') && $moduleVisible('queue')) || (Auth::can('contacts.view') && $moduleVisible('contacts')) || (Auth::can('crm.view') && $moduleVisible('crm')) || (Auth::can('tasks.view') && $moduleVisible('tasks')) || (Auth::can('calendar.view') && $moduleVisible('calendar'))): ?>

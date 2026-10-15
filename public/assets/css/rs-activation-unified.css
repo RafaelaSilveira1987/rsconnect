@@ -1,0 +1,37 @@
+/* Linguagem visual compartilhada do onboarding, editor express e modelos.
+   Não modifica a aparência de páginas operacionais legadas. */
+:root { --rs-activation-line:#e0e8f1; --rs-activation-text:#20314a; --rs-activation-muted:#687a91; --rs-activation-primary:#246db4; }
+.onboarding-assist-hero, .agent-models-hero, .rex-heading {
+  background:#fff!important; color:var(--rs-activation-text)!important;
+  border:1px solid var(--rs-activation-line)!important;
+  border-radius:18px!important; box-shadow:0 4px 20px rgba(26,49,83,.045)!important;
+  padding:clamp(18px,2.1vw,28px)!important;
+}
+.onboarding-assist-hero h2,.onboarding-assist-hero p,.agent-models-hero h1,.agent-models-hero p,.rex-heading h2,.rex-heading p {color:var(--rs-activation-text)!important}
+.onboarding-assist-hero p,.agent-models-hero p,.rex-heading p {color:var(--rs-activation-muted)!important}
+.onboarding-assist-score {background:#f5f8fc!important;color:#1e4166!important;border:1px solid var(--rs-activation-line)!important;box-shadow:none!important}
+.onboarding-assist-score :is(strong,span) {color:#1e4166!important}
+.onboarding-assist-score .onboarding-score-bar{background:#e4edf6!important}
+.onboarding-assist-score .onboarding-score-bar i{background:var(--rs-activation-primary)!important}
+.rs-activation-entry{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid var(--rs-activation-line)!important;border-radius:16px!important;box-shadow:0 4px 20px rgba(26,49,83,.04)!important;padding:21px 24px!important;margin:16px 0!important;background:#fff!important}
+.rs-activation-entry-icon{display:grid;place-items:center;width:44px;height:44px;flex:0 0 44px;border-radius:12px;background:#ecf5fb;color:#246db4;font-weight:850;font-size:19px}
+.rs-activation-entry-copy{flex:1 1 300px;min-width:0}.rs-activation-entry h3{font-size:1.05rem;margin:4px 0 5px;color:#22364e}.rs-activation-entry p{font-size:.85rem;color:var(--rs-activation-muted);margin:0;line-height:1.55}
+.rs-activation-entry .btn {white-space:normal;text-align:center}
+.onboarding-phase-card,.onboarding-current-task,.onboarding-assist-layout .card,.agent-model-section,.agent-niche-card,.agent-blueprint-card {border-color:var(--rs-activation-line)!important;border-radius:16px!important;background:#fff!important;box-shadow:0 4px 20px rgba(26,49,83,.045)!important}
+.rex .rex-panel {border-radius:16px!important;box-shadow:0 4px 20px rgba(26,49,83,.045)!important}
+.rex .rex-stepbar{background:#fff;border:1px solid var(--rs-activation-line);border-radius:16px}
+.rex .rex-step.is-active{background:#edf5fd!important;color:#245f99!important}
+.agent-models-hero-badge {border:1px solid var(--rs-activation-line)!important;background:#f6f9fc!important;color:var(--rs-activation-text)!important;border-radius:13px!important}
+.agent-models-hero-badge :is(strong,span,small){color:var(--rs-activation-text)!important}
+.agent-blueprint-actions {grid-template-columns:repeat(2,minmax(0,1fr))}
+.agent-blueprint-card:has(.rs-model-edit[open]) {grid-column:1/-1}
+.agent-blueprint-card:has(.rs-model-edit[open]) .rs-model-edit {grid-column:1/-1}
+.agent-blueprint-actions .rs-model-advanced {grid-column:1/-1}
+.rs-model-edit[open],.rs-model-advanced[open]{z-index:2}
+.rs-model-edit form,.rs-model-advanced form{width:100%}
+.rs-model-section-title{display:grid;gap:3px;margin:8px 0 3px}.rs-model-section-title strong{font-size:.9rem;color:#263c56}.rs-model-section-title small{font-size:.76rem;color:var(--rs-activation-muted);line-height:1.5}
+.rs-model-toggle{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid var(--rs-activation-line);padding:13px;border-radius:12px;background:#fafcff;cursor:pointer}
+.rs-model-toggle strong{display:block;font-size:.82rem;color:#273a50}.rs-model-toggle small{display:block;margin-top:5px;font-size:.74rem;color:var(--rs-activation-muted);line-height:1.5}.rs-model-toggle input,.rs-model-checkbox input{width:19px;height:19px;accent-color:var(--rs-activation-primary);flex-shrink:0}
+.rs-model-safety-note{padding:11px 12px;background:#f2f7fc;border:1px solid #dce9f5;border-radius:10px;color:#496986;font-size:.75rem;line-height:1.5}
+.rs-model-question-list{display:grid;gap:10px;max-height:390px;overflow-y:auto}.rs-model-question{padding:12px;border:1px solid var(--rs-activation-line);border-radius:11px}.rs-model-question .field{margin-bottom:8px}.rs-model-checkbox{font-size:.75rem;color:#4c627c;display:flex;align-items:center;gap:8px;cursor:pointer}.rs-model-empty{font-size:.8rem;color:var(--rs-activation-muted);line-height:1.5}
+@media(max-width:800px){.rs-activation-entry{padding:16px!important}.rs-activation-entry>.btn{width:100%}.agent-blueprint-actions{grid-template-columns:1fr}.agent-blueprint-actions .rs-model-advanced{grid-column:auto}}
