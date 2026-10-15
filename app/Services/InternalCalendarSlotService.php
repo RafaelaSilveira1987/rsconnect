@@ -1113,6 +1113,119 @@ final class InternalCalendarSlotService
         }
     }
 
+    /**
+     * Remove alocações vinculadas a compromissos efetivamente inativos.
+     *
+     * Mantém a ordem de locks utilizada por hold/confirm/release:
+     * compromisso -> slots. Cada compromisso é revalidado após FOR UPDATE,
+     * evitando liberar uma vaga cujo estado foi alterado concorrentemente.
+     *
+     * @return int número de alocações liberadas
+     */
+    private function releaseInactiveAllocations(int $tenantId, int $appointmentId = 0): int
+    {
+        if ($tenantId < 1) {
+            return 0;
+        }
+
+        $pdo = Database::connection();
+        $params = ['tenant_id' => $tenantId];
+        $sql = 'SELECT DISTINCT a.id
+                FROM calendar_appointments a
+                INNER JOIN calendar_internal_slot_allocations al
+                    ON al.appointment_id = a.id AND al.tenant_id = a.tenant_id
+                WHERE a.tenant_id = :tenant_id
+                  AND a.status IN ("cancelled","rejected","rescheduled")';
+        if ($appointmentId > 0) {
+            $sql .= ' AND a.id = :appointment_id';
+            $params['appointment_id'] = $appointmentId;
+        }
+        $sql .= ' ORDER BY a.id';
+
+        try {
+            $query = $pdo->prepare($sql);
+            $query->execute($params);
+            $ids = array_values(array_unique(array_filter(array_map('intval', $query->fetchAll(PDO::FETCH_COLUMN) ?: []))));
+        } catch (Throwable) {
+            return 0;
+        }
+
+        $released = 0;
+        foreach ($ids as $id) {
+            $ownsTransaction = !$pdo->inTransaction();
+            try {
+                if ($ownsTransaction) {
+                    $pdo->beginTransaction();
+                }
+
+                // Lock de compromisso ANTES de qualquer lock de slot.
+                $check = $pdo->prepare(
+                    'SELECT status FROM calendar_appointments
+                     WHERE tenant_id = :tenant_id AND id = :appointment_id LIMIT 1 FOR UPDATE'
+                );
+                $check->execute(['tenant_id' => $tenantId, 'appointment_id' => $id]);
+                $status = (string) ($check->fetchColumn() ?: '');
+                if (!in_array($status, ['cancelled', 'rejected', 'rescheduled'], true)) {
+                    if ($ownsTransaction) {
+                        $pdo->commit();
+                    }
+                    continue;
+                }
+
+                $slots = $pdo->prepare(
+                    'SELECT DISTINCT slot_id FROM calendar_internal_slot_allocations
+                     WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
+                     ORDER BY slot_id'
+                );
+                $slots->execute(['tenant_id' => $tenantId, 'appointment_id' => $id]);
+                $slotIds = array_values(array_unique(array_filter(array_map('intval', $slots->fetchAll(PDO::FETCH_COLUMN) ?: []))));
+
+                foreach ($slotIds as $slotId) {
+                    if (!$this->lockSlot($pdo, $tenantId, $slotId)) {
+                        throw new \RuntimeException('Horário publicado não encontrado durante a reconciliação.');
+                    }
+                }
+
+                if ($slotIds !== []) {
+                    $delete = $pdo->prepare(
+                        'DELETE FROM calendar_internal_slot_allocations
+                         WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id'
+                    );
+                    $delete->execute(['tenant_id' => $tenantId, 'appointment_id' => $id]);
+                    $count = $delete->rowCount();
+                    foreach ($slotIds as $slotId) {
+                        $this->syncSlotStatus($tenantId, $slotId, $pdo);
+                    }
+                } else {
+                    $count = 0;
+                }
+
+                if ($ownsTransaction) {
+                    $pdo->commit();
+                }
+                $released += $count;
+            } catch (Throwable $exception) {
+                if ($ownsTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                // Se a transação pertence ao chamador, propagar a falha;
+                // ela não pode ser ocultada como se a transação estivesse íntegra.
+                if (!$ownsTransaction) {
+                    throw $exception;
+                }
+                // Demais compromissos podem ser reconciliados independentemente.
+            }
+        }
+
+        if ($released > 0) {
+            Audit::log('calendar.internal_slots_inactive_released', [
+                'appointment_id' => $appointmentId > 0 ? $appointmentId : null,
+                'released' => $released,
+            ], $tenantId);
+        }
+        return $released;
+    }
+
     private function lockAppointment(PDO $pdo, int $tenantId, int $appointmentId): bool
     {
         $query = $pdo->prepare(
