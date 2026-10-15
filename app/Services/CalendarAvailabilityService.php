@@ -719,6 +719,15 @@ final class CalendarAvailabilityService
         $settingsForWindow = $settings;
         $settingsForWindow['_calendar_source'] = $calendarSource;
         $window = $this->searchWindow($settingsForWindow, $appointment);
+        // Consultas internas com data explícita devem varrer a grade do DIA,
+        // não parar nas cinco primeiras sugestões gerais. O limite permanece
+        // inalterado para buscas abertas de várias datas e para o Google.
+        $dateScopedInternalSearch = $calendarSource === 'internal'
+            && trim((string) ($appointment['preferred_day_text'] ?? '')) !== ''
+            && trim((string) ($appointment['starts_at'] ?? '')) !== '';
+        if ($dateScopedInternalSearch) {
+            $settings['max_suggestions'] = max((int) ($settings['max_suggestions'] ?? 5), 120);
+        }
         $pdo = Database::connection();
 
         $pdo->prepare(
@@ -2559,7 +2568,15 @@ final class CalendarAvailabilityService
         // Quando o contato informou um dia e um período, preservamos a janela realmente
         // pedida no diagnóstico. A antecedência mínima é tratada como uma restrição
         // explícita, e não mais colapsando a busca em start=end (ex.: 12:00/12:00).
-        if ($preferred instanceof DateTimeImmutable && $preferredDayText !== '' && !$hasExactTime) {
+        // Uma data solicitada no calendário INTERNO é consultada por inteiro.
+        // Antes, quando o cliente pedia "amanhã às 08:00", a busca iniciava
+        // às 08:00 e podia ocultar 07:00 ou outras vagas válidas do mesmo dia.
+        // A seleção automática ainda exige coincidência EXATA e é revalidada
+        // atomicamente; ampliar a leitura não amplia a permissão de reservar.
+        $dateScopedInternal = $calendarSource === 'internal'
+            && $preferred instanceof DateTimeImmutable
+            && $preferredDayText !== '';
+        if ($dateScopedInternal || ($preferred instanceof DateTimeImmutable && $preferredDayText !== '' && !$hasExactTime)) {
             $date = $preferred->format('Y-m-d');
             if ($period !== '') {
                 [$requestedStart, $requestedEnd] = $this->periodBounds($date, $period, $timezone);

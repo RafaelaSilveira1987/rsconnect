@@ -95,7 +95,8 @@ $check(
 $check(
     str_contains($internal, 'FOR UPDATE')
     && str_contains($internal, 'calendar_internal_slot_allocations')
-    && str_contains($internal, 'occupiedByOthers >= $capacity')
+    && str_contains($internal, '(new PublishedSlotCapacityPolicy())->evaluateHold(')
+    && (new \App\Services\PublishedSlotCapacityPolicy())->evaluateHold(4, 4, false)['code'] === 'capacity_full'
     && str_contains($internal, 'activeAppointmentIdsForSlot')
     && str_contains($internal, 'remaining_capacity'),
     'consumo da vaga é transacional e respeita a capacidade máxima'

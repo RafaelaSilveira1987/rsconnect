@@ -92,9 +92,19 @@ final class CalendarConversationService
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
         $this->assignSuggestionPositions($requestId, $slots);
         $slots = $this->slotsForRequest($tenantId, $appointmentId, $requestId);
+        $slotsFromCalendar = count($slots);
         // Regras por modalidade configuradas no Agente também são operacionais:
         // ex.: atendimento presencial somente às segundas-feiras.
         $slots = (new AgentConversationBehaviorService())->filterSlotsForAppointment($tenantId, $appointment, $slots);
+        // A lista exibida deve ter numeração consecutiva somente para horários
+        // elegíveis. A mesma filtragem é obrigatória na seleção subsequente.
+        if ($slots !== []) {
+            $this->assignSuggestionPositions($requestId, $slots);
+            foreach ($slots as $index => &$eligibleSlot) {
+                $eligibleSlot['suggestion_position'] = $index + 1;
+            }
+            unset($eligibleSlot);
+        }
 
         if (!$this->claimAvailabilityCommunication($tenantId, $appointmentId, $requestId)) {
             return $this->result(false, 'already_processing');
@@ -104,10 +114,12 @@ final class CalendarConversationService
             $constraintMessage = $this->availabilityConstraintMessage($request);
             $message = $constraintMessage !== null
                 ? $constraintMessage
-                : $this->safeNoAvailabilityMessage(
-                    (string) ($settings['no_availability_message'] ?? ''),
-                    $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
-                );
+                : ($slotsFromCalendar > 0
+                    ? 'A agenda retornou horários, mas nenhum atende às regras desta modalidade e dos dias permitidos. Posso consultar outra data ou modalidade autorizada?'
+                    : $this->safeNoAvailabilityMessage(
+                        (string) ($settings['no_availability_message'] ?? ''),
+                        $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
+                    ));
             $send = $this->sendAppointmentMessage(
                 $appointment,
                 $message,
@@ -322,6 +334,9 @@ final class CalendarConversationService
 
         $requestId = (int) ($appointment['availability_request_id'] ?? 0);
         $slots = $this->slotsForRequest($tenantId, (int) $appointment['id'], $requestId);
+        // Não permitir selecionar um slot que tenha sido ocultado pelas regras
+        // da modalidade. O mesmo filtro se aplica ao envio e à escolha.
+        $slots = (new AgentConversationBehaviorService())->filterSlotsForAppointment($tenantId, $appointment, $slots);
         if ($slots === []) {
             return $this->incomingResult(false, false, 'options_missing');
         }
@@ -1328,7 +1343,10 @@ final class CalendarConversationService
         if ($requestId < 1) {
             return [];
         }
-        $max = max(1, min(20, (int) ((new CalendarAvailabilityService())->settings($tenantId)['max_suggestions'] ?? 5)));
+        // O limite de sugestões gerais pertence ao gerador. Ao consultar um
+        // dia inteiro, o gerador pode ter encontrado mais vagas; não as corte
+        // novamente aqui, sob risco de falsa indisponibilidade.
+        $max = 120;
         try {
             $statement = Database::connection()->prepare(
                 'SELECT *
@@ -1449,7 +1467,10 @@ final class CalendarConversationService
                 break;
             }
         }
-        if ($position === null && preg_match('/(?:^|\b)(?:opcao\s*)?(\d{1,2})(?:\b|$)/u', $normalized, $match)) {
+        // Não confundir "8 horas" com a opção 8 quando a grade possui
+        // muitas vagas. Uma posição numérica exige mensagem apenas numérica,
+        // "opção N" ou "#N"; horários seguem pelo parser de hora abaixo.
+        if ($position === null && preg_match('/^(?:(?:opcao|numero|n)\s*#?\s*|#)?(\d{1,3})$/u', $normalized, $match)) {
             $candidate = (int) $match[1];
             if ($candidate >= 1 && $candidate <= count($slots)) {
                 $position = $candidate;
@@ -1466,6 +1487,12 @@ final class CalendarConversationService
         }
 
         $time = trim((string) ($intent['preferred_time'] ?? ''));
+        // O parser principal nem sempre interpreta respostas como "8 horas".
+        // Com a grade numerada, trate essa fala como horário (08:00), nunca
+        // como a oitava opção. A revalidação do slot continua em applySlot().
+        if ($time === '' && preg_match('/^(?:as\s+)?([01]?\d|2[0-3])\s*h(?:oras?)?$/u', $normalized, $timeMatch)) {
+            $time = sprintf('%02d:00', (int) $timeMatch[1]);
+        }
         $date = trim((string) ($intent['preferred_date'] ?? ''));
         $day = trim((string) ($intent['preferred_day'] ?? ''));
         $hasDayOrDate = $date !== '' || $day !== '';
@@ -1630,12 +1657,43 @@ Responda com o número ou com o horário que prefere."
     /** @param array<int,array<string,mixed>> $slots */
     private function formatOptions(array $slots): string
     {
-        $lines = [];
+        // Para a grade diária, agrupa horários em linhas compactas e mantém
+        // os números usados na seleção conversacional. Não exibe "ocupado"
+        // para uma vaga que a integração apenas deixou de retornar.
+        $days = [];
         foreach ($slots as $index => $slot) {
+            $start = new DateTimeImmutable((string) $slot['starts_at']);
+            $day = $start->format('Y-m-d');
             $position = (int) ($slot['suggestion_position'] ?? ($index + 1));
-            $lines[] = $position . '. ' . $this->slotHumanLabel($slot);
+            $label = $position . '. ' . $start->format('H:i');
+            $raw = json_decode((string) ($slot['raw_json'] ?? '{}'), true);
+            $remaining = is_array($raw) ? ($raw['remaining_capacity'] ?? null) : null;
+            if (is_numeric($remaining) && (int) $remaining > 1) {
+                $label .= ' (' . (int) $remaining . ' vagas)';
+            }
+            $modality = strtolower(trim((string) ($slot['modality'] ?? '')));
+            if (in_array($modality, ['online', 'presencial'], true)) {
+                $label .= ' ' . ucfirst($modality);
+            }
+            $days[$day]['date'] = $this->humanDate($start);
+            $days[$day]['times'][] = $label;
         }
-        return implode("\n", $lines);
+        if (count($slots) <= 5) {
+            $lines = [];
+            foreach ($slots as $index => $slot) {
+                $lines[] = (int) ($slot['suggestion_position'] ?? ($index + 1)) . '. ' . $this->slotHumanLabel($slot);
+            }
+            return implode("\n", $lines);
+        }
+        $lines = [];
+        foreach ($days as $day) {
+            $lines[] = $day['date'];
+            foreach (array_chunk($day['times'], 3) as $row) {
+                $lines[] = implode('  |  ', $row);
+            }
+            $lines[] = '';
+        }
+        return trim(implode("\n", $lines));
     }
 
     private function selectedMessage(array $settings, array $appointment, array $slot): string

@@ -806,27 +806,47 @@ final class InternalCalendarSlotService
         }
         $pdo ??= Database::connection();
         if ($this->allocationTableAvailable()) {
+            // Não faz DELETE global seguido por sincronização fora de lock.
+            // A mesma trava do slot usada no hold serializa limpeza e reserva.
             try {
                 $slots = $pdo->prepare(
-                    'SELECT DISTINCT slot_id
-                     FROM calendar_internal_slot_allocations
+                    'SELECT DISTINCT slot_id FROM calendar_internal_slot_allocations
                      WHERE tenant_id = :tenant_id AND state = "held"
-                       AND expires_at IS NOT NULL AND expires_at < NOW()'
+                       AND expires_at IS NOT NULL AND expires_at < NOW()
+                     ORDER BY slot_id'
                 );
                 $slots->execute(['tenant_id' => $tenantId]);
                 $slotIds = array_values(array_filter(array_map('intval', $slots->fetchAll(PDO::FETCH_COLUMN) ?: [])));
-                if ($slotIds === []) {
-                    return 0;
-                }
-                $delete = $pdo->prepare(
-                    'DELETE FROM calendar_internal_slot_allocations
-                     WHERE tenant_id = :tenant_id AND state = "held"
-                       AND expires_at IS NOT NULL AND expires_at < NOW()'
-                );
-                $delete->execute(['tenant_id' => $tenantId]);
-                $released = $delete->rowCount();
+                $released = 0;
                 foreach ($slotIds as $slotId) {
-                    $this->syncSlotStatus($tenantId, $slotId, $pdo);
+                    $ownsTransaction = !$pdo->inTransaction();
+                    if ($ownsTransaction) {
+                        $pdo->beginTransaction();
+                    }
+                    try {
+                        if (!$this->lockSlot($pdo, $tenantId, $slotId)) {
+                            if ($ownsTransaction) {
+                                $pdo->commit();
+                            }
+                            continue;
+                        }
+                        $delete = $pdo->prepare(
+                            'DELETE FROM calendar_internal_slot_allocations
+                             WHERE tenant_id = :tenant_id AND slot_id = :slot_id
+                               AND state = "held" AND expires_at IS NOT NULL AND expires_at < NOW()'
+                        );
+                        $delete->execute(['tenant_id' => $tenantId, 'slot_id' => $slotId]);
+                        $released += $delete->rowCount();
+                        $this->syncSlotStatus($tenantId, $slotId, $pdo);
+                        if ($ownsTransaction) {
+                            $pdo->commit();
+                        }
+                    } catch (Throwable $exception) {
+                        if ($ownsTransaction && $pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                        throw $exception;
+                    }
                 }
                 return $released;
             } catch (Throwable) {
@@ -859,26 +879,58 @@ final class InternalCalendarSlotService
     }
 
     /** @return array{ok:bool,message:string,owner_user_id?:int|null,internal_slot_id?:int,remaining_capacity?:int} */
+    /**
+     * Reserva por capacidade: lock do compromisso antes do slot, sempre na mesma
+     * ordem de confirmação/liberação. O UNIQUE(slot_id, appointment_id) da
+     * migration 124 dá idempotência para retries do mesmo compromisso.
+     */
     private function holdWithAllocations(int $tenantId, int $appointmentId, int $internalSlotId, int $holdMinutes): array
     {
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
-            $this->releaseExpiredHolds($tenantId, $pdo);
+            if (!$this->lockAppointment($pdo, $tenantId, $appointmentId)) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'O agendamento não existe mais.'];
+            }
             $select = $pdo->prepare(
-                'SELECT * FROM calendar_internal_slots
-                 WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
+                'SELECT * FROM calendar_internal_slots WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
             );
             $select->execute(['id' => $internalSlotId, 'tenant_id' => $tenantId]);
             $slot = $select->fetch(PDO::FETCH_ASSOC);
             if (!$slot || in_array((string) ($slot['status'] ?? ''), ['cancelled', 'blocked', 'expired'], true)) {
                 $pdo->rollBack();
-                return ['ok' => false, 'message' => 'O horário liberado não existe mais ou está bloqueado. Faça uma nova consulta.'];
+                return ['ok' => false, 'message' => 'O horário não está mais disponível. Faça uma nova consulta.'];
             }
 
-            // Preserve a pré-reserva anterior até confirmar que o novo alvo ainda
-            // tem capacidade. Assim uma tentativa concorrente não faz o paciente
-            // perder a vaga que já estava segurada.
+            // Limpeza LOCAL ao slot sob lock; a limpeza global anterior podia
+            // mudar status de slots concorrentes sem travar suas linhas.
+            $pdo->prepare(
+                'DELETE FROM calendar_internal_slot_allocations
+                 WHERE tenant_id = :tenant_id AND slot_id = :slot_id AND state = "held"
+                   AND expires_at IS NOT NULL AND expires_at < NOW()'
+            )->execute(['tenant_id' => $tenantId, 'slot_id' => $internalSlotId]);
+
+            $existing = $pdo->prepare(
+                'SELECT slot_id,state FROM calendar_internal_slot_allocations
+                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
+                   AND state IN ("held","booked") ORDER BY slot_id'
+            );
+            $existing->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+            $current = $existing->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($current as $row) {
+                if ((string) $row['state'] === 'booked' && (int) $row['slot_id'] !== $internalSlotId) {
+                    $pdo->rollBack();
+                    return ['ok' => false, 'message' => 'Este compromisso já tem outro horário confirmado. Solicite uma remarcação autorizada.'];
+                }
+            }
+            $alreadyBooked = false;
+            foreach ($current as $row) {
+                if ((int) $row['slot_id'] === $internalSlotId && (string) $row['state'] === 'booked') {
+                    $alreadyBooked = true;
+                }
+            }
+
             $capacity = max(1, (int) ($slot['capacity_total'] ?? 1));
             $count = $pdo->prepare(
                 'SELECT COUNT(*) FROM calendar_internal_slot_allocations
@@ -887,71 +939,58 @@ final class InternalCalendarSlotService
                    AND state IN ("held","booked")
                    AND (state <> "held" OR expires_at IS NULL OR expires_at >= NOW())'
             );
-            $count->execute([
-                'tenant_id' => $tenantId,
-                'slot_id' => $internalSlotId,
-                'appointment_id' => $appointmentId,
-            ]);
-            $occupiedByOthers = (int) $count->fetchColumn();
-            if ($occupiedByOthers >= $capacity) {
+            $count->execute(['tenant_id' => $tenantId, 'slot_id' => $internalSlotId, 'appointment_id' => $appointmentId]);
+            $decision = (new PublishedSlotCapacityPolicy())->evaluateHold(
+                $capacity, (int) $count->fetchColumn(), $alreadyBooked
+            );
+            if (!$decision['allowed']) {
                 $pdo->rollBack();
-                return ['ok' => false, 'message' => 'Esse horário acabou de atingir a capacidade máxima. Faça uma nova consulta.'];
+                return ['ok' => false, 'message' => 'O horário atingiu sua capacidade máxima. Consulte outras vagas.'];
             }
 
-            $otherSlots = $pdo->prepare(
-                'SELECT slot_id FROM calendar_internal_slot_allocations
-                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
-                   AND state = "held" AND slot_id <> :slot_id'
-            );
-            $otherSlots->execute([
-                'tenant_id' => $tenantId,
-                'appointment_id' => $appointmentId,
-                'slot_id' => $internalSlotId,
-            ]);
-            $releasedSlotIds = array_values(array_filter(array_map('intval', $otherSlots->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+            // A transferência do hold acontece depois da verificação de capacidade.
+            $releasedSlotIds = [];
+            foreach ($current as $row) {
+                $oldSlot = (int) $row['slot_id'];
+                if ($oldSlot !== $internalSlotId && (string) $row['state'] === 'held') {
+                    $releasedSlotIds[] = $oldSlot;
+                }
+            }
             $pdo->prepare(
                 'DELETE FROM calendar_internal_slot_allocations
                  WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
                    AND state = "held" AND slot_id <> :slot_id'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'appointment_id' => $appointmentId,
-                'slot_id' => $internalSlotId,
-            ]);
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId, 'slot_id' => $internalSlotId]);
 
-            $holdMinutes = max(5, min(1440, $holdMinutes));
-            $pdo->prepare(
-                'INSERT INTO calendar_internal_slot_allocations
-                    (tenant_id, slot_id, appointment_id, state, expires_at)
-                 VALUES
-                    (:tenant_id, :slot_id, :appointment_id, "held", DATE_ADD(NOW(), INTERVAL ' . $holdMinutes . ' MINUTE))
-                 ON DUPLICATE KEY UPDATE
-                    state = IF(state = "booked", "booked", "held"),
-                    expires_at = IF(state = "booked", NULL, VALUES(expires_at)),
-                    updated_at = CURRENT_TIMESTAMP'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'slot_id' => $internalSlotId,
-                'appointment_id' => $appointmentId,
-            ]);
-
-            foreach ($releasedSlotIds as $releasedSlotId) {
-                $this->syncSlotStatus($tenantId, $releasedSlotId, $pdo);
+            if (!$alreadyBooked) {
+                $holdMinutes = max(5, min(1440, $holdMinutes));
+                $pdo->prepare(
+                    'INSERT INTO calendar_internal_slot_allocations
+                        (tenant_id, slot_id, appointment_id, state, expires_at)
+                     VALUES (:tenant_id, :slot_id, :appointment_id, "held", DATE_ADD(NOW(), INTERVAL ' . $holdMinutes . ' MINUTE))
+                     ON DUPLICATE KEY UPDATE
+                        state = IF(state = "booked", "booked", "held"),
+                        expires_at = IF(state = "booked", NULL, VALUES(expires_at)),
+                        updated_at = CURRENT_TIMESTAMP'
+                )->execute(['tenant_id' => $tenantId, 'slot_id' => $internalSlotId, 'appointment_id' => $appointmentId]);
+            }
+            // Não atualiza status de outros slots enquanto eles não estiverem
+            // travados. O sincronizador usa o lock para evitar writes perdidos.
+            foreach (array_unique($releasedSlotIds) as $oldSlotId) {
+                $this->lockSlot($pdo, $tenantId, $oldSlotId);
+                $this->syncSlotStatus($tenantId, $oldSlotId, $pdo);
             }
             $this->syncSlotStatus($tenantId, $internalSlotId, $pdo);
             $counts = $this->allocationCounts($tenantId, $internalSlotId, $pdo);
             $pdo->commit();
-
             Audit::log('calendar.internal_slot_held', [
-                'slot_id' => $internalSlotId,
-                'appointment_id' => $appointmentId,
-                'hold_minutes' => $holdMinutes,
-                'capacity_total' => $capacity,
-                'occupied_count' => $counts['occupied'],
+                'slot_id' => $internalSlotId, 'appointment_id' => $appointmentId,
+                'capacity_total' => $capacity, 'occupied_count' => $counts['occupied'],
+                'idempotent_booked' => $alreadyBooked,
             ], $tenantId);
             return [
                 'ok' => true,
-                'message' => 'Horário pré-reservado na Agenda interna.',
+                'message' => $alreadyBooked ? 'Horário já confirmado para este compromisso.' : 'Horário pré-reservado na Agenda interna.',
                 'owner_user_id' => !empty($slot['owner_user_id']) ? (int) $slot['owner_user_id'] : null,
                 'internal_slot_id' => $internalSlotId,
                 'remaining_capacity' => max(0, $capacity - (int) $counts['occupied']),
@@ -960,17 +999,19 @@ final class InternalCalendarSlotService
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            return ['ok' => false, 'message' => 'Não foi possível pré-reservar o horário: ' . $exception->getMessage()];
+            return ['ok' => false, 'message' => 'Falha ao reservar a vaga; consulte a disponibilidade novamente.'];
         }
     }
 
     private function confirmAllocationForAppointment(int $tenantId, int $appointmentId): array
     {
         $pdo = Database::connection();
+        $pdo->beginTransaction();
         try {
-            // Descobre o slot antes da transação e depois trava o próprio slot,
-            // seguindo a mesma ordem de lock usada na pré-reserva. Isso evita
-            // confirmar uma allocation expirada/removida entre validação e update.
+            if (!$this->lockAppointment($pdo, $tenantId, $appointmentId)) {
+                $pdo->rollBack();
+                return ['attempted' => true, 'ok' => false, 'message' => 'Compromisso não encontrado.'];
+            }
             $lookup = $pdo->prepare(
                 'SELECT slot_id FROM calendar_internal_slot_allocations
                  WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
@@ -978,132 +1019,116 @@ final class InternalCalendarSlotService
             );
             $lookup->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
             $slotId = (int) $lookup->fetchColumn();
-            if ($slotId < 1) {
-                return ['attempted' => true, 'ok' => false, 'message' => 'A vaga publicada não está mais pré-reservada para este agendamento.'];
-            }
-
-            $pdo->beginTransaction();
-            $this->releaseExpiredHolds($tenantId, $pdo);
-            $slotLock = $pdo->prepare(
-                'SELECT id FROM calendar_internal_slots
-                 WHERE id = :slot_id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
-            );
-            $slotLock->execute(['slot_id' => $slotId, 'tenant_id' => $tenantId]);
-            if (!$slotLock->fetchColumn()) {
+            if ($slotId < 1 || !$this->lockSlot($pdo, $tenantId, $slotId)) {
                 $pdo->rollBack();
-                return ['attempted' => true, 'ok' => false, 'message' => 'O horário publicado não existe mais.'];
+                return ['attempted' => true, 'ok' => false, 'message' => 'Não existe vaga válida pré-reservada para este compromisso.'];
             }
-
-            $slotQuery = $pdo->prepare(
-                'SELECT slot_id, state, expires_at FROM calendar_internal_slot_allocations
-                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
-                   AND slot_id = :slot_id AND state IN ("held","booked")
-                 ORDER BY id DESC LIMIT 1 FOR UPDATE'
+            $stateCheck = $pdo->prepare(
+                'SELECT status FROM calendar_internal_slots WHERE tenant_id=:tenant_id AND id=:slot_id'
             );
-            $slotQuery->execute([
-                'tenant_id' => $tenantId,
-                'appointment_id' => $appointmentId,
-                'slot_id' => $slotId,
-            ]);
+            $stateCheck->execute(['tenant_id' => $tenantId, 'slot_id' => $slotId]);
+            if (in_array((string) $stateCheck->fetchColumn(), ['cancelled', 'blocked', 'expired'], true)) {
+                $pdo->rollBack();
+                return ['attempted' => true, 'ok' => false, 'message' => 'O horário foi bloqueado e não pode ser confirmado.'];
+            }
+            $slotQuery = $pdo->prepare(
+                'SELECT state,expires_at FROM calendar_internal_slot_allocations
+                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
+                   AND slot_id = :slot_id AND state IN ("held","booked") LIMIT 1 FOR UPDATE'
+            );
+            $slotQuery->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId, 'slot_id' => $slotId]);
             $allocation = $slotQuery->fetch(PDO::FETCH_ASSOC);
             if (!$allocation) {
                 $pdo->rollBack();
-                return ['attempted' => true, 'ok' => false, 'message' => 'A vaga publicada expirou ou deixou de estar reservada para este agendamento.'];
+                return ['attempted' => true, 'ok' => false, 'message' => 'A reserva não existe mais. Consulte a agenda novamente.'];
             }
-
-            $update = $pdo->prepare(
-                'UPDATE calendar_internal_slot_allocations
-                 SET state = "booked", expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id AND slot_id = :slot_id'
-            );
-            $update->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId, 'slot_id' => $slotId]);
+            if ((string) $allocation['state'] === 'held') {
+                // Comparação no banco (UTC) — nunca confirma hold vencido.
+                $pdo->prepare(
+                    'UPDATE calendar_internal_slot_allocations
+                     SET state = "booked", expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+                     WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id
+                       AND slot_id = :slot_id AND state = "held"
+                       AND (expires_at IS NULL OR expires_at >= NOW())'
+                )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId, 'slot_id' => $slotId]);
+                $verify = $pdo->prepare(
+                    'SELECT state FROM calendar_internal_slot_allocations
+                     WHERE tenant_id=:tenant_id AND appointment_id=:appointment_id AND slot_id=:slot_id'
+                );
+                $verify->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId, 'slot_id' => $slotId]);
+                if ($verify->fetchColumn() !== 'booked') {
+                    $pdo->rollBack();
+                    return ['attempted' => true, 'ok' => false, 'message' => 'A pré-reserva expirou. Consulte novos horários.'];
+                }
+            }
             $this->syncSlotStatus($tenantId, $slotId, $pdo);
             $pdo->commit();
-
             Audit::log('calendar.internal_slot_booked', ['appointment_id' => $appointmentId, 'slot_id' => $slotId], $tenantId);
             return ['attempted' => true, 'ok' => true, 'message' => 'Horário confirmado na Agenda interna.'];
         } catch (Throwable $exception) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            return ['attempted' => true, 'ok' => false, 'message' => 'Não foi possível confirmar a vaga publicada: ' . $exception->getMessage()];
+            return ['attempted' => true, 'ok' => false, 'message' => 'Falha na confirmação da vaga. Verifique a situação e tente novamente.'];
         }
     }
 
     private function releaseAllocationForAppointment(int $tenantId, int $appointmentId): array
     {
         $pdo = Database::connection();
+        $pdo->beginTransaction();
         try {
+            if (!$this->lockAppointment($pdo, $tenantId, $appointmentId)) {
+                $pdo->rollBack();
+                return ['attempted' => true, 'ok' => false, 'message' => 'Compromisso não encontrado.'];
+            }
             $query = $pdo->prepare(
                 'SELECT DISTINCT slot_id FROM calendar_internal_slot_allocations
-                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id'
+                 WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id ORDER BY slot_id'
             );
             $query->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
             $slotIds = array_values(array_filter(array_map('intval', $query->fetchAll(PDO::FETCH_COLUMN) ?: [])));
             if ($slotIds === []) {
+                $pdo->commit();
                 return ['attempted' => false, 'ok' => true, 'message' => null];
             }
-            $delete = $pdo->prepare(
+            foreach ($slotIds as $slotId) {
+                $this->lockSlot($pdo, $tenantId, $slotId);
+            }
+            $pdo->prepare(
                 'DELETE FROM calendar_internal_slot_allocations
                  WHERE tenant_id = :tenant_id AND appointment_id = :appointment_id'
-            );
-            $delete->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
+            )->execute(['tenant_id' => $tenantId, 'appointment_id' => $appointmentId]);
             foreach ($slotIds as $slotId) {
                 $this->syncSlotStatus($tenantId, $slotId, $pdo);
             }
+            $pdo->commit();
             Audit::log('calendar.internal_slot_released', ['appointment_id' => $appointmentId, 'slot_ids' => $slotIds], $tenantId);
             return ['attempted' => true, 'ok' => true, 'message' => 'Vaga devolvida à capacidade do horário publicado.'];
         } catch (Throwable $exception) {
-            return ['attempted' => true, 'ok' => false, 'message' => 'Não foi possível liberar a vaga: ' . $exception->getMessage()];
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            return ['attempted' => true, 'ok' => false, 'message' => 'Não foi possível liberar a vaga. Tente novamente.'];
         }
     }
 
-    private function releaseInactiveAllocations(int $tenantId, int $appointmentId = 0): int
+    private function lockAppointment(PDO $pdo, int $tenantId, int $appointmentId): bool
     {
-        $pdo = Database::connection();
-        try {
-            $sql = 'SELECT DISTINCT al.slot_id
-                    FROM calendar_internal_slot_allocations al
-                    INNER JOIN calendar_appointments a ON a.id = al.appointment_id AND a.tenant_id = al.tenant_id
-                    WHERE al.tenant_id = :tenant_id
-                      AND a.status IN ("cancelled","rejected","rescheduled")';
-            $params = ['tenant_id' => $tenantId];
-            if ($appointmentId > 0) {
-                $sql .= ' AND a.id = :appointment_id';
-                $params['appointment_id'] = $appointmentId;
-            }
-            $select = $pdo->prepare($sql);
-            $select->execute($params);
-            $slotIds = array_values(array_filter(array_map('intval', $select->fetchAll(PDO::FETCH_COLUMN) ?: [])));
-            if ($slotIds === []) {
-                return 0;
-            }
+        $query = $pdo->prepare(
+            'SELECT id FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
+        );
+        $query->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+        return (bool) $query->fetchColumn();
+    }
 
-            $deleteSql = 'DELETE al FROM calendar_internal_slot_allocations al
-                          INNER JOIN calendar_appointments a ON a.id = al.appointment_id AND a.tenant_id = al.tenant_id
-                          WHERE al.tenant_id = :tenant_id
-                            AND a.status IN ("cancelled","rejected","rescheduled")';
-            $deleteParams = ['tenant_id' => $tenantId];
-            if ($appointmentId > 0) {
-                $deleteSql .= ' AND a.id = :appointment_id';
-                $deleteParams['appointment_id'] = $appointmentId;
-            }
-            $delete = $pdo->prepare($deleteSql);
-            $delete->execute($deleteParams);
-            $released = $delete->rowCount();
-            foreach ($slotIds as $slotId) {
-                $this->syncSlotStatus($tenantId, $slotId, $pdo);
-            }
-            if ($released > 0) {
-                Audit::log('calendar.internal_slots_inactive_released', [
-                    'appointment_id' => $appointmentId > 0 ? $appointmentId : null,
-                    'released' => $released,
-                ], $tenantId);
-            }
-            return $released;
-        } catch (Throwable) {
-            return 0;
-        }
+    private function lockSlot(PDO $pdo, int $tenantId, int $slotId): bool
+    {
+        $query = $pdo->prepare(
+            'SELECT id FROM calendar_internal_slots WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
+        );
+        $query->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
+        return (bool) $query->fetchColumn();
     }
 
     /** @return array{held:int,booked:int,occupied:int} */
