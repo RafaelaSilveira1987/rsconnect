@@ -115,9 +115,13 @@ final class AgentReadinessEvaluator
         ]);
         $workflowOk = count(array_filter($workflow, static fn ($step) => is_array($step) && !empty($step['active']))) > 0
             && $workflowAudit['ok'];
+        $collectionPlan = (new WorkflowTriageIntegrityService())->plan($fields, $workflow);
+        $fixCollections = !$workflowOk && $collectionPlan['unrepairable'] === []
+            && ($collectionPlan['missing'] !== [] || $collectionPlan['late'] !== []);
         $add('workflow', 'Execução do fluxo e políticas', $workflowOk ? 'ok' : 'error', 'critical',
             $workflowOk ? 'Nenhum conflito crítico detectado no fluxo.' :
-                ($workflow === [] ? 'Nenhum fluxo de atendimento foi configurado.' : implode(' ', array_slice($workflowAudit['errors'], 0, 3))), 8);
+                ($workflow === [] ? 'Nenhum fluxo de atendimento foi configurado.' : implode(' ', array_slice($workflowAudit['errors'], 0, 3))),
+            8, $fixCollections ? 'restore_required_triage_steps' : null);
 
         // Agenda é uma capacidade opcional, mas, quando habilitada, requer
         // infraestrutura real de pré-agendamento e disponibilidade no tenant.

@@ -69,7 +69,9 @@ foreach ($triageFields as $triageField) {
     }
 }
 $activeTriageKeys = array_values(array_filter(array_unique($activeTriageKeys)));
-$agendaEnabledForBusiness = $calendarMode !== 'none';
+$agendaEnabledForBusiness = (string) ($calendarAccess['calendar_mode'] ?? 'none') !== 'none';
+$bookingCapacityMode = (($calendarAvailability['booking_capacity_mode'] ?? 'single') === 'capacity') ? 'capacity' : 'single';
+$defaultSlotCapacity = $bookingCapacityMode === 'capacity' ? max(2, (int) ($calendarAvailability['default_slot_capacity'] ?? 4)) : 1;
 $businessCapacity = $bookingCapacityMode === 'capacity' ? max(2, $defaultSlotCapacity) : 1;
 $businessHumanApproval = (int) ($preSchedule['require_human_approval'] ?? 1) === 1;
 $minimumAgeConfigured = max(0, (int) ($agentLimits['minimum_age'] ?? 0));
@@ -81,14 +83,10 @@ foreach (['discount_rule_enabled', 'refund_rule_enabled', 'exception_rule_enable
 }
 if ($hasAgeRestriction) $businessLimitCount++;
 
-$hours = ['start' => '08:00', 'end' => '18:00', 'days' => ['mon', 'tue', 'wed', 'thu', 'fri']];
-$hoursSource = $attendanceSettings['business_hours_json'] ?? ($defaultAgent['business_hours_json'] ?? null);
-if (!empty($hoursSource)) {
-    $decoded = json_decode((string) $hoursSource, true);
-    if (is_array($decoded)) {
-        $hours = array_merge($hours, $decoded);
-    }
-}
+// O horário operacional do agente é a fonte da configuração compartilhada.
+// A UI simples não tem como editar múltiplos períodos por dia sem perda.
+$hoursSource = $defaultAgent['business_hours_json'] ?? ($attendanceSettings['business_hours_json'] ?? null);
+$hours = \App\Services\BusinessHoursCompactEditorService::describe($hoursSource);
 $dayLabels = ['mon' => 'Seg', 'tue' => 'Ter', 'wed' => 'Qua', 'thu' => 'Qui', 'fri' => 'Sex', 'sat' => 'Sáb', 'sun' => 'Dom'];
 $calendarMode = (string) ($calendarAccess['calendar_mode'] ?? 'none');
 $smartCalendarStatus = (string) ($calendarAccess['smart_calendar_status'] ?? 'locked');
@@ -107,8 +105,6 @@ foreach ($calendarDayLabels as $dayNumber => $_dayLabel) {
         ];
     }
 }
-$bookingCapacityMode = (($calendarAvailability['booking_capacity_mode'] ?? 'single') === 'capacity') ? 'capacity' : 'single';
-$defaultSlotCapacity = $bookingCapacityMode === 'capacity' ? max(2, (int) ($calendarAvailability['default_slot_capacity'] ?? 4)) : 1;
 $statusIcon = static fn (string $status): string => match ($status) {
     'complete' => '✓',
     'skipped' => '–',
@@ -425,11 +421,16 @@ foreach ($activationPhases as $phaseIndex => $phase) {
                                 <span class="business-question-number">2</span>
                                 <div><h3>Quando sua equipe atende?</h3><p>Escolha os dias e o horário normal de funcionamento. Isso também orienta mensagens fora do expediente.</p></div>
                             </div>
-                            <div class="form-grid two">
-                                <label class="field"><span>Começa às</span><input type="time" name="start_time" value="<?= View::e($hours['start'] ?? '08:00') ?>" required></label>
-                                <label class="field"><span>Termina às</span><input type="time" name="end_time" value="<?= View::e($hours['end'] ?? '18:00') ?>" required></label>
-                            </div>
-                            <div class="business-day-grid"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, (array) ($hours['days'] ?? []), true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                            <?php if (!empty($hours['complex'])): ?>
+                                <div class="business-consequence" role="status"><strong>Horários personalizados preservados</strong><span>Esta empresa possui horários diferentes ou mais de um intervalo no mesmo dia. Para não perder períodos configurados, altere-os em <a href="/onboarding/express">Configurar meu atendimento</a>. Salvar outros dados aqui não substituirá esses horários.</span></div>
+                                <input type="hidden" name="preserve_business_hours" value="1">
+                            <?php else: ?>
+                                <div class="form-grid two">
+                                    <label class="field"><span>Começa às</span><input type="time" name="start_time" value="<?= View::e($hours['start']) ?>" required></label>
+                                    <label class="field"><span>Termina às</span><input type="time" name="end_time" value="<?= View::e($hours['end']) ?>" required></label>
+                                </div>
+                                <div class="business-day-grid"><?php foreach ($dayLabels as $key => $label): ?><label><input type="checkbox" name="days[]" value="<?= View::e($key) ?>" <?= in_array($key, $hours['days'], true) ? 'checked' : '' ?>><span><?= View::e($label) ?></span></label><?php endforeach; ?></div>
+                            <?php endif; ?>
                             <details class="business-inline-optional">
                                 <summary>Mensagem fora do horário e SLA <small>opcional</small></summary>
                                 <div class="business-inline-optional-body">
@@ -460,10 +461,13 @@ foreach ($activationPhases as $phaseIndex => $phase) {
                             </div>
                             <div class="business-calendar-fields" data-business-calendar-fields <?= $agendaEnabledForBusiness ? '' : 'hidden' ?>>
                                 <div class="form-grid three">
-                                    <label class="field"><span>Duração do atendimento</span><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($calendarAvailability['default_duration_minutes'] ?? $preSchedule['default_duration_minutes'] ?? 60) ?>"><span>min</span></div></label>
-                                    <label class="field"><span>Pessoas no mesmo horário</span><input type="number" name="slot_capacity" min="1" max="100" value="<?= (int) $businessCapacity ?>"><small>Use 1 para atendimento individual.</small></label>
-                                    <label class="field"><span>Antecedência mínima</span><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($calendarAvailability['min_notice_hours'] ?? 2) ?>"><span>hora(s)</span></div></label>
+                                    <label class="field"><span>Duração do atendimento</span><div class="input-with-suffix"><input type="number" name="default_duration_minutes" min="15" max="240" value="<?= (int) ($calendarAvailability['default_duration_minutes'] ?? $preSchedule['default_duration_minutes'] ?? 60) ?>" <?= !empty($hours['complex']) ? 'readonly' : '' ?>><span>min</span></div></label>
+                                    <label class="field"><span>Pessoas no mesmo horário</span><input type="number" name="slot_capacity" min="1" max="100" value="<?= (int) $businessCapacity ?>" <?= !empty($hours['complex']) ? 'readonly' : '' ?>><small>Use 1 para atendimento individual.</small></label>
+                                    <label class="field"><span>Antecedência mínima</span><div class="input-with-suffix"><input type="number" name="min_notice_hours" min="0" max="720" value="<?= (int) ($calendarAvailability['min_notice_hours'] ?? 2) ?>" <?= !empty($hours['complex']) ? 'readonly' : '' ?>><span>hora(s)</span></div></label>
                                 </div>
+                                <?php if (!empty($hours['complex'])): ?>
+                                    <p class="text-muted">Duração, capacidade e antecedência são administradas em <a href="/calendar/availability">Disponibilidade da agenda</a> quando existem horários personalizados.</p>
+                                <?php endif; ?>
                                 <div class="business-decision-block">
                                     <span>Quem confirma o horário?</span>
                                     <div class="business-binary-choice compact" role="radiogroup">

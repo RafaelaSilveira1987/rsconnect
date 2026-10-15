@@ -1,3 +1,11 @@
+## 2026-10-15 — Hotfix de coerência: triagem, prontidão e expediente
+
+- Corrige perda de vínculos da triagem na Ativação Assistida e protege etapas avançadas.
+- Adiciona `restore_required_triage_steps` como correção explícita e transacional de perguntas obrigatórias ausentes do fluxo.
+- Preserva horários múltiplos ou diferentes por dia no salvamento simplificado; evita sobrescrita da agenda interna.
+- Leitura da configuração operacional na Ativação Assistida, correção de inicialização de capacidade, cache JS atualizado.
+- Não muda agenda, registros de consultas nem permissões de aprovação humana. Homologação MySQL ainda pendente.
+
 ## 2026-10-15 — Unificação progressiva das configurações (Etapa 1)
 
 - Normaliza expediente compacto, detalhado e JSON de API no mesmo serviço do runtime e readiness.

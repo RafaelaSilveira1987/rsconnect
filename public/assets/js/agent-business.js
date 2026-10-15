@@ -470,6 +470,7 @@
     const descriptions = {
       set_default_out_of_hours_action: 'Quando alguém escrever fora do horário, o contato será registrado para retorno no próximo expediente.',
       disable_meeting_link_capability: 'O envio de link automático será desligado até você informar um endereço válido.',
+      restore_required_triage_steps: 'As informações obrigatórias sem etapa de coleta serão vinculadas antes da consulta à agenda. Perguntas, horários e reservas existentes serão preservados.',
     };
     const description = descriptions[item.auto_fix_action];
     if (!description) return;

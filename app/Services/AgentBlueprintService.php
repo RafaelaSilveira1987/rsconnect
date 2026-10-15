@@ -1003,20 +1003,13 @@ final class AgentBlueprintService
             }
         }
 
-        // 36.37.2: o workflow também é a fonte da lista de informações ativas, não
-        // apenas da trava de agenda. Antes, remover um campo de uma etapa podia deixá-lo
-        // active=1 em tenant_triage_fields; o cursor então o perguntava mais tarde como
-        // uma "etapa fantasma". Agora tudo que não está em uma etapa de Coleta ativa
-        // fica disponível no catálogo, porém fora do runtime.
-        // Compatibilidade com o smoke test 36.37.2: SET required_before_schedule = 0, active = 0
-        $pdo->prepare(
-            'UPDATE tenant_triage_fields
-             SET required_before_schedule = 0,
-                 required_for_completion = 0,
-                 active = 0
-             WHERE tenant_id = :tenant_id'
-        )->execute(['tenant_id' => $tenantId]);
-
+        // Uma edição de "Ordem do atendimento" não pode apagar a escolha já salva
+        // na Ativação Assistida. A implementação anterior colocava TODOS os campos
+        // como inactive=0 e reativava somente os vinculados ao workflow; quando o
+        // workflow estava vazio (caso dos prints), todas as perguntas sumiam.
+        // Exclusão deliberada de coletores é tratada em deleteWorkflowSteps().
+        // Campos ativos mas ainda sem coletor permanecem visíveis como pendência,
+        // nunca são desativados silenciosamente para fazer a auditoria passar.
         if ($allWorkflowFields === []) {
             return;
         }

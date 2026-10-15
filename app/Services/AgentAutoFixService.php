@@ -16,6 +16,7 @@ final class AgentAutoFixService
     private const ALLOWED_ACTIONS = [
         'set_default_out_of_hours_action',
         'disable_meeting_link_capability',
+        'restore_required_triage_steps',
     ];
 
     private const DEFAULT_OUTSIDE_MESSAGE =
@@ -63,6 +64,7 @@ final class AgentAutoFixService
             match ($action) {
                 'set_default_out_of_hours_action' => $this->setDefaultOutOfHoursAction($pdo, $tenantId, $agentId),
                 'disable_meeting_link_capability' => $this->disableMeetingLinkCapability($pdo, $tenantId, $agentId),
+                'restore_required_triage_steps' => (new WorkflowTriageIntegrityService())->repair($pdo, $tenantId),
             };
 
             $updated = $readiness->audit($tenantId, $agentId);

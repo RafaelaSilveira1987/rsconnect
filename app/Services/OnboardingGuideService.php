@@ -251,7 +251,26 @@ final class OnboardingGuideService
         }
 
         $currentCalendar = (new CalendarAvailabilityService())->settings($tenantId);
+        // Formulário simplificado não consegue expressar múltiplos horários por dia.
+        // Protege a configuração operacional e as janelas próprias da agenda.
+        $complexBusinessHours = $this->complexOperationalHours($tenantId) !== null;
+        if ($complexBusinessHours && $agendaEnabled
+            && (empty($currentCalendar['enabled'])
+                || (string) ($currentAccess['calendar_mode'] ?? 'none') !== $calendarMode)) {
+            throw new \RuntimeException('Há horários personalizados e a agenda ainda não possui janelas disponíveis. Configure a agenda antes de habilitar o agendamento.');
+        }
         $currentPreSchedule = $this->preScheduleSettings($tenantId);
+        if ($complexBusinessHours && $agendaEnabled) {
+            $existingCapacity = ($currentCalendar['booking_capacity_mode'] ?? 'single') === 'capacity'
+                ? max(2, (int) ($currentCalendar['default_slot_capacity'] ?? 4)) : 1;
+            $existingDuration = (int) ($currentCalendar['default_duration_minutes'] ?? $currentPreSchedule['default_duration_minutes'] ?? 60);
+            $existingNotice = (int) ($currentCalendar['min_notice_hours'] ?? 2);
+            if ($capacity !== $existingCapacity
+                || (int) ($data['default_duration_minutes'] ?? $existingDuration) !== $existingDuration
+                || (int) ($data['min_notice_hours'] ?? $existingNotice) !== $existingNotice) {
+                throw new \RuntimeException('Horários personalizados: altere duração, capacidade e antecedência nas configurações da Agenda para preservar as janelas existentes.');
+            }
+        }
         $currentLimits = $this->agentLimitsSettings($tenantId);
 
         $start = trim((string) ($data['start_time'] ?? '08:00')) ?: '08:00';
@@ -305,6 +324,7 @@ final class OnboardingGuideService
             'sla_target_minutes' => (int) ($data['sla_target_minutes'] ?? 30),
             'sla_warning_percent' => (int) ($data['sla_warning_percent'] ?? 80),
             'sla_count_outside_hours' => !empty($data['sla_count_outside_hours']) ? 1 : 0,
+            'preserve_business_hours' => $complexBusinessHours ? 1 : 0,
         ];
 
         $agendaPayload = [
@@ -327,6 +347,7 @@ final class OnboardingGuideService
             'published_slots_respect_min_notice' => !empty($currentCalendar['published_slots_respect_min_notice']) ? 1 : 0,
             'default_message' => (string) ($currentPreSchedule['default_message'] ?? 'A consulta de disponibilidade para {{dia_preferido}} às {{horario_preferido}} está em andamento.'),
             'collect_message' => (string) ($currentPreSchedule['collect_message'] ?? 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.'),
+            'preserve_calendar_schedule' => $complexBusinessHours ? 1 : 0,
         ];
 
         // MySQL faz COMMIT implicito em CREATE TABLE / ALTER TABLE, inclusive com
@@ -404,6 +425,12 @@ final class OnboardingGuideService
 
         $hoursJson = json_encode(['days' => $days, 'start' => $start, 'end' => $end], JSON_UNESCAPED_UNICODE);
         $timezone = trim((string) ($data['business_timezone'] ?? 'America/Sao_Paulo')) ?: 'America/Sao_Paulo';
+        $complex = $this->complexOperationalHours($tenantId);
+        if ($complex !== null) {
+            // Ignora valores compactos do POST: não podem representar os horários reais.
+            $hoursJson = $complex['hours'];
+            $timezone = $complex['timezone'];
+        }
         $afterHours = mb_substr(trim((string) ($data['after_hours_message'] ?? 'No momento estamos fora do horário de atendimento. Assim que possível, nossa equipe retorna o contato.')), 0, 500);
         $handoff = mb_substr(trim((string) ($data['human_handoff_message'] ?? 'Vou encaminhar sua solicitação para uma pessoa da equipe continuar o atendimento.')), 0, 500);
         $cooldown = max(0, min(3600, (int) ($data['cooldown_seconds'] ?? 60)));
@@ -536,7 +563,11 @@ final class OnboardingGuideService
 
         $calendar = new CalendarAvailabilityService();
         if ($mode === 'internal') {
-            $calendar->configureInternalMode($tenantId, $data + ['default_duration_minutes' => $duration]);
+            if (empty($data['preserve_calendar_schedule'])) {
+                $calendar->configureInternalMode($tenantId, $data + ['default_duration_minutes' => $duration]);
+            }
+            // Se existirem janelas personalizadas, mantém intervalos, profissionais,
+            // capacidade e reservas: o formulário simplificado só atualiza permissões.
         } elseif ($mode === 'smart') {
             $calendar->configureSmartMode($tenantId);
         } else {
@@ -887,101 +918,75 @@ final class OnboardingGuideService
         return ['status' => 'complete', 'message' => 'Limites de autoridade e elegibilidade estão configurados no Policy Engine.'];
     }
 
+    /**
+     * @return array{hours:string,timezone:string}|null
+     * Complexidade = vários intervalos ou faixas diferentes entre dias.
+     */
+    private function complexOperationalHours(int $tenantId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT business_hours_json,business_timezone FROM ai_agents WHERE tenant_id=:tid ORDER BY is_default DESC,id ASC LIMIT 1');
+        $stmt->execute(['tid'=>$tenantId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $raw = (string) ($row['business_hours_json'] ?? '');
+        if ($raw === '') {
+            $settings = $this->onboardingSettings($tenantId);
+            $raw = (string) ($settings['business_hours_json'] ?? '');
+            $row['business_timezone'] = $settings['business_timezone'] ?? 'America/Sao_Paulo';
+        }
+        $normalized = BusinessHoursNormalizer::normalize($raw);
+        if ($normalized === null || $normalized === []) return null;
+        if (!BusinessHoursCompactEditorService::describe($normalized)['complex']) return null;
+        return [
+            'hours'=>json_encode($normalized, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'timezone'=>(string) (($row['business_timezone'] ?? '') ?: 'America/Sao_Paulo'),
+        ];
+    }
+
     /** @param list<string> $selectedFields */
     private function syncAssistedTriageAndWorkflow(int $tenantId, array $selectedFields, bool $agendaEnabled): void
     {
         if (!$this->tableExists('tenant_triage_fields')) {
             if ($selectedFields !== []) {
-                throw new \RuntimeException('A estrutura de perguntas do assistente ainda não foi preparada para esta empresa.');
+                throw new \RuntimeException('A estrutura de perguntas do assistente ainda não foi preparada.');
             }
             return;
         }
 
-        $stmt = $this->pdo->prepare('SELECT field_key FROM tenant_triage_fields WHERE tenant_id = :tenant_id ORDER BY position, id');
-        $stmt->execute(['tenant_id' => $tenantId]);
+        $stmt = $this->pdo->prepare('SELECT field_key FROM tenant_triage_fields WHERE tenant_id=:tid ORDER BY position,id');
+        $stmt->execute(['tid'=>$tenantId]);
         $known = array_values(array_filter(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [])));
         $selectedFields = array_values(array_intersect($known, $selectedFields));
-
         $update = $this->pdo->prepare(
-            'UPDATE tenant_triage_fields
-             SET active = :active,
-                 required_before_schedule = :required_before_schedule,
-                 required_for_completion = :required_for_completion,
-                 source = CASE WHEN source = "blueprint" THEN "tenant" ELSE source END
-             WHERE tenant_id = :tenant_id AND field_key = :field_key'
+            'UPDATE tenant_triage_fields SET active=:active,
+                required_before_schedule=:before,required_for_completion=:required,
+                source=CASE WHEN source="blueprint" THEN "tenant" ELSE source END
+             WHERE tenant_id=:tid AND field_key=:key'
         );
-        foreach ($known as $fieldKey) {
-            $active = in_array($fieldKey, $selectedFields, true);
-            $update->execute([
-                'active' => $active ? 1 : 0,
-                'required_before_schedule' => $active && $agendaEnabled ? 1 : 0,
-                'required_for_completion' => $active ? 1 : 0,
-                'tenant_id' => $tenantId,
-                'field_key' => $fieldKey,
-            ]);
+        foreach ($known as $key) {
+            $enabled = in_array($key, $selectedFields, true);
+            $update->execute(['active'=>$enabled ? 1 : 0,
+                'before'=>$enabled && $agendaEnabled ? 1 : 0,
+                'required'=>$enabled ? 1 : 0,'tid'=>$tenantId,'key'=>$key]);
         }
+        if (!$this->tableExists('tenant_agent_workflow_steps')) return;
 
-        if (!$this->tableExists('tenant_agent_workflow_steps')) {
-            return;
-        }
-
-        $workflowStmt = $this->pdo->prepare(
-            'SELECT id, step_key, step_type, config_json, position
-             FROM tenant_agent_workflow_steps
-             WHERE tenant_id = :tenant_id
-             ORDER BY position, id'
-        );
-        $workflowStmt->execute(['tenant_id' => $tenantId]);
-        $workflow = $workflowStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        $collectRows = array_values(array_filter($workflow, static fn (array $row): bool => ($row['step_type'] ?? '') === 'collect'));
-
-        if ($collectRows === [] && $selectedFields !== []) {
-            $firstActionPosition = 20;
-            foreach ($workflow as $row) {
-                if (($row['step_type'] ?? '') === 'action') {
-                    $firstActionPosition = max(20, (int) ($row['position'] ?? 20));
-                    break;
-                }
-            }
-            $this->pdo->prepare(
-                'INSERT INTO tenant_agent_workflow_steps
-                    (tenant_id, step_key, label, step_type, config_json, active, position, source)
-                 VALUES
-                    (:tenant_id, "assisted_intake", "Informações iniciais", "collect", :config_json, 1, :position, "tenant")'
-            )->execute([
-                'tenant_id' => $tenantId,
-                'config_json' => json_encode(['field_keys' => $selectedFields], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'position' => max(1, $firstActionPosition - 10),
-            ]);
-        } elseif ($collectRows !== []) {
-            foreach ($collectRows as $index => $row) {
-                $config = json_decode((string) ($row['config_json'] ?? ''), true);
-                $config = is_array($config) ? $config : [];
-                $config['field_keys'] = $index === 0 ? $selectedFields : [];
-                unset($config['field_key']);
-                $this->pdo->prepare(
-                    'UPDATE tenant_agent_workflow_steps
-                     SET config_json = :config_json, active = :active, source = "tenant"
-                     WHERE id = :id AND tenant_id = :tenant_id'
-                )->execute([
-                    'config_json' => json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    'active' => $index === 0 && $selectedFields !== [] ? 1 : 0,
-                    'id' => (int) $row['id'],
-                    'tenant_id' => $tenantId,
-                ]);
+        // O fluxo avançado pertence ao cliente. Não concentre todas as perguntas
+        // no primeiro coletor nem desative os demais: isso desfaz o trabalho feito
+        // em Meu atendimento e provoca erro crítico de prontidão.
+        // Ação de agenda só participa quando a empresa permite agendamento.
+        $stmt = $this->pdo->prepare('SELECT id,step_key,step_type,config_json FROM tenant_agent_workflow_steps WHERE tenant_id=:tid');
+        $stmt->execute(['tid'=>$tenantId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $step) {
+            if (($step['step_type'] ?? '') !== 'action') continue;
+            $config = json_decode((string)($step['config_json'] ?? ''), true);
+            $action = is_array($config) ? (string) ($config['action_key'] ?? '') : '';
+            if ($action === 'calendar.pre_schedule' || str_starts_with((string)($step['step_key'] ?? ''), 'calendar')) {
+                $this->pdo->prepare('UPDATE tenant_agent_workflow_steps SET active=:active WHERE tenant_id=:tid AND id=:id')
+                    ->execute(['active'=>$agendaEnabled ? 1 : 0,'tid'=>$tenantId,'id'=>$step['id']]);
             }
         }
-
-        // A ação de agenda continua cadastrada, mas só participa do fluxo quando a
-        // empresa realmente habilitou agendamento. Isso evita etapas fantasmas.
-        foreach ($workflow as $row) {
-            if (($row['step_type'] ?? '') !== 'action') continue;
-            $config = json_decode((string) ($row['config_json'] ?? ''), true);
-            $actionKey = is_array($config) ? trim((string) ($config['action_key'] ?? '')) : '';
-            if ($actionKey === 'calendar.pre_schedule' || str_starts_with((string) ($row['step_key'] ?? ''), 'calendar')) {
-                $this->pdo->prepare('UPDATE tenant_agent_workflow_steps SET active = :active WHERE id = :id AND tenant_id = :tenant_id')
-                    ->execute(['active' => $agendaEnabled ? 1 : 0, 'id' => (int) $row['id'], 'tenant_id' => $tenantId]);
-            }
+        if ($agendaEnabled && $selectedFields !== []) {
+            (new WorkflowTriageIntegrityService())->repair($this->pdo, $tenantId);
         }
     }
 

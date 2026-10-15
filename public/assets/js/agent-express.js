@@ -193,7 +193,9 @@
     async fix(check, button) {
       const detail = check.auto_fix_action === 'disable_meeting_link_capability'
         ? 'O envio automático de links de reunião será desligado. Nenhum link será enviado até você reativar a opção.'
-        : 'Quando alguém escrever fora do horário, o contato será registrado para retorno no próximo expediente.';
+        : check.auto_fix_action === 'restore_required_triage_steps'
+          ? 'As perguntas obrigatórias serão posicionadas antes da consulta à agenda. Isso não altera reservas nem permissões.'
+          : 'Quando alguém escrever fora do horário, o contato será registrado para retorno no próximo expediente.';
       if (!window.confirm(`${detail}\n\nDeseja aplicar esta correção?`)) return;
       button.disabled = true; button.textContent = 'Corrigindo…';
       try {
