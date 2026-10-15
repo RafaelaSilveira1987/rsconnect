@@ -36,7 +36,8 @@ final class ExpressSetupController
         }
         try {
             $loaded = (new ExpressBusinessConfigurationReader())->load(Database::connection(), $tenantId);
-            echo json_encode(['ok'=>true,'payload'=>$loaded['payload'],'has_saved'=>$loaded['has_saved']],
+            echo json_encode(['ok'=>true,'payload'=>$loaded['payload'],'has_saved'=>$loaded['has_saved'],
+                'protected_questions'=>$loaded['protected_questions']],
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $e) {
             error_log('[RS Connect][BusinessConfig] ' . $e->getMessage());
@@ -61,6 +62,7 @@ final class ExpressSetupController
             'setupPayload'=>$loaded['payload'],
             'setupAgents'=>$loaded['agents'],
             'setupHasSaved'=>$loaded['has_saved'],
+            'setupProtectedQuestions'=>$loaded['protected_questions'],
             'setupCanManage'=>Auth::can('agents.manage'),
             'setupCanView'=>Auth::can('agents.view'),
         ]);

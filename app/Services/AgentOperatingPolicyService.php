@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+// Compatibilidade com testes e comandos legados que incluem este serviço diretamente.
+require_once __DIR__ . '/BusinessHoursNormalizer.php';
+
 use App\Core\Env;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -172,47 +175,9 @@ final class AgentOperatingPolicyService
     /** @return array<string,list<array{0:string,1:string}>> */
     private function normalizedRanges(string $json): array
     {
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
-        $result = ['mon' => [], 'tue' => [], 'wed' => [], 'thu' => [], 'fri' => [], 'sat' => [], 'sun' => []];
-
-        // Formato compacto usado pelo onboarding: {days:[...], start:"08:00", end:"18:00"}.
-        if (isset($decoded['days'], $decoded['start'], $decoded['end']) && is_array($decoded['days'])) {
-            $start = trim((string) $decoded['start']);
-            $end = trim((string) $decoded['end']);
-            if ($this->validTime($start) && $this->validTime($end) && $end > $start) {
-                foreach ($decoded['days'] as $day) {
-                    $key = strtolower(trim((string) $day));
-                    if (array_key_exists($key, $result)) {
-                        $result[$key][] = [$start, $end];
-                    }
-                }
-            }
-            return array_filter($result, static fn (array $items): bool => $items !== []);
-        }
-
-        // Formato detalhado usado na tela do agente: {mon:[["08:00","18:00"]], ...}.
-        foreach ($result as $day => $_) {
-            $rawRanges = $decoded[$day] ?? [];
-            if (!is_array($rawRanges)) {
-                continue;
-            }
-            foreach ($rawRanges as $range) {
-                if (!is_array($range) || count($range) < 2) {
-                    continue;
-                }
-                $start = trim((string) ($range[0] ?? ''));
-                $end = trim((string) ($range[1] ?? ''));
-                if ($this->validTime($start) && $this->validTime($end) && $end > $start) {
-                    $result[$day][] = [$start, $end];
-                }
-            }
-        }
-
-        return array_filter($result, static fn (array $items): bool => $items !== []);
+        // O runtime e o validador de prontidão compartilham a mesma interpretação.
+        // Formatos legados permanecem aceitos, sem inventar intervalos inválidos.
+        return BusinessHoursNormalizer::normalize($json) ?? [];
     }
 
     private function validTime(string $value): bool

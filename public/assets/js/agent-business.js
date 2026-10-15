@@ -27,6 +27,17 @@
   catch { root.textContent = 'Não foi possível abrir suas configurações. Atualize a página.'; return; }
 
   const data = initial.payload;
+  // Itens de outro editor são somente leitura; não entram no JSON da API.
+  const protectedQuestions = Array.isArray(initial.protected_questions) ? initial.protected_questions : [];
+  const otherBox = $('#baOtherQuestions');
+  const otherList = $('#baOtherQuestionsList');
+  if (otherBox && otherList && protectedQuestions.length) {
+    otherBox.hidden = false;
+    for (const item of protectedQuestions) {
+      const li = make('li', '', String(item.question || 'Pergunta cadastrada'));
+      otherList.append(li);
+    }
+  }
   if (!Array.isArray(data.routing_and_schedule?.business_hours)) {
     // Protege clientes com HTML antigo em cache; nunca inventa horários.
     const hours = data.routing_and_schedule?.business_hours || {};

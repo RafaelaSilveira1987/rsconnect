@@ -33,18 +33,26 @@ final class ExpressOnboardingService
         $pdo->beginTransaction();
         try {
             // Serializa gravações concorrentes para a mesma empresa.
-            $lock = $pdo->prepare('SELECT id FROM tenants WHERE id = :tenant_id FOR UPDATE');
+            $lock = $pdo->prepare('SELECT id,agent_blueprint_id FROM tenants WHERE id = :tenant_id FOR UPDATE');
             $lock->execute(['tenant_id'=>$tenantId]);
-            if (!(int) $lock->fetchColumn()) throw new RuntimeException('Empresa não encontrada.');
+            $tenant = $lock->fetch(PDO::FETCH_ASSOC) ?: [];
+            if (empty($tenant['id'])) throw new RuntimeException('Empresa não encontrada.');
+            $existingProfile = $pdo->prepare(
+                'SELECT blueprint_id,blueprint_version_id,config_json FROM tenant_agent_profiles
+                 WHERE tenant_id=:tid FOR UPDATE'
+            );
+            $existingProfile->execute(['tid'=>$tenantId]);
+            $previous = $existingProfile->fetch(PDO::FETCH_ASSOC) ?: [];
+            $preferredBlueprintId = (int) (($previous['blueprint_id'] ?? 0) ?: ($tenant['agent_blueprint_id'] ?? 0));
 
             // Usa o catálogo existente, sem duplicar políticas em templates espalhados.
             $lookup = $pdo->prepare(
                 'SELECT b.id FROM agent_blueprints b
                  INNER JOIN business_niches n ON n.id = b.niche_id
                  WHERE n.code = :niche AND n.active = 1 AND b.active = 1
-                 ORDER BY b.id ASC LIMIT 1'
+                 ORDER BY CASE WHEN b.id=:preferred THEN 0 ELSE 1 END, b.id ASC LIMIT 1'
             );
-            $lookup->execute(['niche'=>$dto->segment->nicheCode()]);
+            $lookup->execute(['niche'=>$dto->segment->nicheCode(), 'preferred'=>$preferredBlueprintId]);
             $blueprintId = (int) $lookup->fetchColumn();
             if ($blueprintId < 1) throw new RuntimeException('Blueprint não disponível para este segmento.');
             $base = $blueprints->blueprint($blueprintId, $pdo);
@@ -52,7 +60,33 @@ final class ExpressOnboardingService
                 throw new RuntimeException('Blueprint sem versão publicada.');
             }
             $versionId = (int) $base['version_id'];
+            // A edição diária NÃO é um comando de trocar Blueprint ou sua versão.
+            // Uma versão nova publicada nunca migra uma empresa implicitamente.
+            if (!empty($previous['blueprint_id']) && (int) $previous['blueprint_id'] !== $blueprintId) {
+                throw new RuntimeException('Esta empresa utiliza outro modelo. A troca de segmento exige revisão na Ativação Assistida.');
+            }
+            $newerBlueprintAvailable = false;
+            if (!empty($previous['blueprint_version_id'])
+                && (int) $previous['blueprint_version_id'] !== $versionId) {
+                $pinned = $pdo->prepare(
+                    'SELECT config_json FROM agent_blueprint_versions
+                     WHERE id=:version AND blueprint_id=:blueprint LIMIT 1'
+                );
+                $pinned->execute(['version'=>(int) $previous['blueprint_version_id'], 'blueprint'=>$blueprintId]);
+                $rawPinned = $pinned->fetchColumn();
+                $pinnedConfig = is_string($rawPinned) ? json_decode($rawPinned, true) : null;
+                if (!is_array($pinnedConfig)) {
+                    throw new RuntimeException('Não foi possível ler a versão aplicada. A administração precisa revisar o modelo.');
+                }
+                $base['config'] = $pinnedConfig;
+                $versionId = (int) $previous['blueprint_version_id'];
+                $newerBlueprintAvailable = true;
+            }
             $compiled = $blueprints->compileExpress($dto, (array) ($base['config'] ?? []));
+            // Preserva personalizações que não fazem parte do contrato limitado Express.
+            $previousConfig = json_decode((string) ($previous['config_json'] ?? ''), true);
+            $config = is_array($previousConfig) ? $previousConfig : [];
+            foreach ($compiled['config'] as $key => $value) $config[$key] = $value;
             $json = static fn (mixed $value): string => json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             $profile = $pdo->prepare(
@@ -68,13 +102,16 @@ final class ExpressOnboardingService
             // O endpoint é o botão explícito Aplicar, e não um salvamento de rascunho.
             $profile->execute([
                 'tenant_id'=>$tenantId,'niche'=>(int) $base['niche_id'],
-                'blueprint'=>$blueprintId,'version'=>$versionId,'config'=>$json($compiled['config']),
+                'blueprint'=>$blueprintId,'version'=>$versionId,'config'=>$json($config),
             ]);
 
-            $this->persistCapabilities($pdo, $tenantId, $compiled['capabilities']);
-            $this->persistTriage($pdo, $tenantId, $compiled['triage_fields'], $json);
-            $this->persistPolicies($pdo, $tenantId, $compiled['policies'], $json);
-            $this->persistWorkflow($pdo, $tenantId, $compiled['workflow'], $json);
+            // Reconcilia por chave; campos de outras telas permanecem operacionais.
+            $effective = (new TenantExpressConfigurationWriter())->save($pdo, $tenantId, $compiled);
+            foreach (['triage_fields','workflow','policies','capabilities'] as $domain) {
+                $config[$domain] = $effective[$domain];
+            }
+            $pdo->prepare('UPDATE tenant_agent_profiles SET config_json=:config WHERE tenant_id=:tid')
+                ->execute(['tid'=>$tenantId,'config'=>$json($config)]);
             $pdo->prepare(
                 'UPDATE tenants SET business_niche_id=:niche, agent_blueprint_id=:blueprint,
                  agent_blueprint_version_id=:version WHERE id=:tenant_id'
@@ -91,17 +128,17 @@ final class ExpressOnboardingService
             $audit = (new AgentRuntimeConfigurationService())->audit([
                 'triage_fields'=>array_map(static fn ($f) => [
                     'field_key'=>$f['key'],'label'=>$f['label'],'prompt_text'=>$f['prompt'],
-                    'active'=>1,'required_before_schedule'=>$f['required_before_schedule'] ?? false,
+                    'active'=>$f['active'] ?? 1,'required_before_schedule'=>$f['required_before_schedule'] ?? false,
                     'required_for_completion'=>$f['required_for_completion'] ?? false,
-                ], $compiled['triage_fields']),
+                ], $effective['triage_fields']),
                 'workflow'=>array_map(static fn ($step) => [
                     'step_key'=>$step['key'],'label'=>$step['label'],'step_type'=>$step['type'],
-                    'config'=>$step['config'] ?? [],'active'=>1,'position'=>$step['position'],
-                ], $compiled['workflow']),
+                    'config'=>$step['config'] ?? [],'active'=>$step['active'] ?? 1,'position'=>$step['position'],
+                ], $effective['workflow']),
                 'policies'=>array_map(static fn ($p) => [
                     'policy_key'=>$p['key'],'policy_type'=>$p['type'], 'value'=>$p['value'],
-                    'action_key'=>$p['action'], 'customer_message'=>$p['message'], 'enabled'=>1,
-                ], $compiled['policies']),
+                    'action_key'=>$p['action'], 'customer_message'=>$p['message'], 'enabled'=>$p['enabled'] ?? 1,
+                ], $effective['policies']),
             ]);
             if (!$audit['ok']) {
                 throw new RuntimeException('Invariantes do workflow não aprovadas: ' . implode('; ', $audit['errors']));
@@ -111,83 +148,13 @@ final class ExpressOnboardingService
                 'tenant_id'=>$tenantId,'blueprint_id'=>$blueprintId,'version_id'=>$versionId,
                 'configuration_saved'=>true, 'connected_agents_updated'=>$updated,
                 'audit'=>['ok'=>$audit['ok'],'warnings'=>$audit['warnings']],
+                'protected_fields'=>$effective['protected_fields'],
+                'newer_blueprint_available'=>$newerBlueprintAvailable,
                 'requires_review'=>true,
             ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
-        }
-    }
-
-    /** @param array<string,bool> $capabilities */
-    private function persistCapabilities(PDO $pdo, int $tenantId, array $capabilities): void
-    {
-        $pdo->prepare('DELETE FROM tenant_agent_capabilities WHERE tenant_id=:tid AND agent_id IS NULL')
-            ->execute(['tid'=>$tenantId]);
-        $stmt = $pdo->prepare(
-            'INSERT INTO tenant_agent_capabilities (tenant_id,agent_id,capability_key,enabled,source)
-             VALUES (:tid,NULL,:key,:enabled,"tenant")'
-        );
-        foreach ($capabilities as $key => $enabled) {
-            $stmt->execute(['tid'=>$tenantId,'key'=>$key,'enabled'=>$enabled ? 1 : 0]);
-        }
-    }
-
-    /** @param list<array<string,mixed>> $fields */
-    private function persistTriage(PDO $pdo, int $tenantId, array $fields, callable $json): void
-    {
-        $pdo->prepare('DELETE FROM tenant_triage_fields WHERE tenant_id=:tid')->execute(['tid'=>$tenantId]);
-        $stmt = $pdo->prepare(
-            'INSERT INTO tenant_triage_fields
-              (tenant_id,field_key,label,field_type,prompt_text,options_json,
-               required_before_schedule,required_for_completion,active,position,source)
-             VALUES (:tid,:key,:label,:type,:prompt,:options,:before,:required,1,:position,"tenant")'
-        );
-        foreach ($fields as $f) {
-            $stmt->execute([
-                'tid'=>$tenantId,'key'=>$f['key'],'label'=>$f['label'],
-                'type'=>$f['type'] ?? 'text','prompt'=>$f['prompt'],
-                'options'=>empty($f['options']) ? null : $json($f['options']),
-                'before'=>!empty($f['required_before_schedule']) ? 1 : 0,
-                'required'=>!empty($f['required_for_completion']) ? 1 : 0,
-                'position'=>$f['position'],
-            ]);
-        }
-    }
-
-    /** @param list<array<string,mixed>> $policies */
-    private function persistPolicies(PDO $pdo, int $tenantId, array $policies, callable $json): void
-    {
-        $pdo->prepare('DELETE FROM tenant_agent_policies WHERE tenant_id=:tid')->execute(['tid'=>$tenantId]);
-        $stmt = $pdo->prepare(
-            'INSERT INTO tenant_agent_policies
-              (tenant_id,policy_key,policy_type,value_json,action_key,customer_message,enabled,priority,source)
-             VALUES (:tid,:key,:type,:value,:action,:message,1,:priority,"tenant")'
-        );
-        foreach ($policies as $index => $p) {
-            $stmt->execute([
-                'tid'=>$tenantId,'key'=>$p['key'],'type'=>$p['type'],'value'=>$json($p['value']),
-                'action'=>$p['action'] ?? 'block','message'=>($p['message'] ?? '') !== '' ? $p['message'] : null,
-                'priority'=>$p['priority'] ?? (($index+1)*10),
-            ]);
-        }
-    }
-
-    /** @param list<array<string,mixed>> $workflow */
-    private function persistWorkflow(PDO $pdo, int $tenantId, array $workflow, callable $json): void
-    {
-        $pdo->prepare('DELETE FROM tenant_agent_workflow_steps WHERE tenant_id=:tid')->execute(['tid'=>$tenantId]);
-        $stmt = $pdo->prepare(
-            'INSERT INTO tenant_agent_workflow_steps
-              (tenant_id,step_key,label,step_type,config_json,active,position,source)
-             VALUES (:tid,:key,:label,:type,:config,1,:position,"tenant")'
-        );
-        foreach ($workflow as $step) {
-            $stmt->execute([
-                'tid'=>$tenantId,'key'=>$step['key'],'label'=>$step['label'],
-                'type'=>$step['type'],'config'=>$json($step['config'] ?? []),
-                'position'=>$step['position'],
-            ]);
         }
     }
 

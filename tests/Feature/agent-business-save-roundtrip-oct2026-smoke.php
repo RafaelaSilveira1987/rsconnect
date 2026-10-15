@@ -42,7 +42,7 @@ class FakeBusinessPDO extends PDO {
     public function __construct(private string $profile, private array $fields) {}
     public function prepare(string $query, array $options = []): PDOStatement|false {
         if (str_contains($query,'SELECT config_json FROM tenant_agent_profiles')) return new FakeBusinessStatement([[$this->profile]]);
-        if (str_contains($query,'SELECT id,name,is_default FROM ai_agents')) return new FakeBusinessStatement([]);
+        if (str_contains($query,'SELECT id,name,is_default,business_hours_enabled,business_hours_json')) return new FakeBusinessStatement([]);
         if (str_contains($query,'SELECT name FROM tenants')) return new FakeBusinessStatement([['Vida Plena']]);
         if (str_contains($query,'SELECT field_key,prompt_text,active FROM tenant_triage_fields')) return new FakeBusinessStatement($this->fields);
         if (str_contains($query,'SELECT capability_key,enabled FROM tenant_agent_capabilities')) return new FakeBusinessStatement([]);

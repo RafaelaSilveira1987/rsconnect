@@ -88,8 +88,10 @@ final class AgentReadinessEvaluator
         $action = $routing['out_of_hours_action'] ?? null;
         $afterHoursMessage = trim((string) ($agent['after_hours_message'] ?? ''));
         $outsidePolicy = $this->policy($policies, 'express.out_of_hours');
-        $outOfHoursOk = in_array($action, $validActions, true) && $afterHoursMessage !== ''
-            && $outsidePolicy !== null && ($outsidePolicy['value'] ?? null) === $action;
+        $outOfHoursOk = $express === []
+            ? $afterHoursMessage !== '' && $hoursOk
+            : (in_array($action, $validActions, true) && $afterHoursMessage !== ''
+                && $outsidePolicy !== null && ($outsidePolicy['value'] ?? null) === $action);
         $canFixOutside = !$outOfHoursOk && !empty($profile['id']) && $express !== [];
         $add('routing_and_schedule', 'Ação fora do expediente', $outOfHoursOk ? 'ok' : 'error', 'critical',
             $outOfHoursOk ? 'Ação e mensagem fora do expediente definidas.' : 'Defina uma ação estruturada e uma resposta fora do horário.',
@@ -197,28 +199,7 @@ final class AgentReadinessEvaluator
         if ((int) ($agent['business_hours_enabled'] ?? 0) !== 1) return false;
         $timezone = trim((string) ($agent['business_timezone'] ?? ''));
         if ($timezone === '' || !in_array($timezone, DateTimeZone::listIdentifiers(), true)) return false;
-        $json = $agent['business_hours_json'] ?? null;
-        $ranges = is_array($json) ? $json : (is_string($json) ? json_decode($json, true) : null);
-        if (!is_array($ranges)) return false;
-        $present = false;
-        foreach ($ranges as $day => $slots) {
-            if (!in_array($day, ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], true) || !is_array($slots)) return false;
-            $previousEnd = '';
-            foreach ($slots as $slot) {
-                if (!is_array($slot) || count($slot) !== 2) return false;
-                [$start, $end] = array_values($slot);
-                if (!is_string($start) || !is_string($end) || !$this->validTime($start) || !$this->validTime($end)
-                    || $start >= $end || ($previousEnd !== '' && $start < $previousEnd)) return false;
-                $previousEnd = $end;
-                $present = true;
-            }
-        }
-        return $present;
-    }
-
-    private function validTime(string $time): bool
-    {
-        return preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $time) === 1;
+        return BusinessHoursNormalizer::hasValidIntervals($agent['business_hours_json'] ?? null);
     }
 
     private function validHttps(string $url): bool

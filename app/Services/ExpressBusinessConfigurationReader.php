@@ -14,40 +14,10 @@ use RuntimeException;
  */
 final class ExpressBusinessConfigurationReader
 {
-    private const DAYS = [
-        'mon'=>'monday', 'tue'=>'tuesday', 'wed'=>'wednesday', 'thu'=>'thursday',
-        'fri'=>'friday', 'sat'=>'saturday', 'sun'=>'sunday',
-    ];
-
     /** @return list<array{day:string,start:string,end:string}> */
     public static function normalizeHours(mixed $hours): array
     {
-        if (!is_array($hours)) return [];
-        $result = [];
-        if (array_is_list($hours)) {
-            foreach ($hours as $interval) {
-                if (!is_array($interval) || !is_string($interval['day'] ?? null)
-                    || !is_string($interval['start'] ?? null) || !is_string($interval['end'] ?? null)) continue;
-                if (!in_array($interval['day'], self::DAYS, true)) continue;
-                $result[] = ['day'=>$interval['day'], 'start'=>$interval['start'], 'end'=>$interval['end']];
-            }
-        } else {
-            foreach (self::DAYS as $short => $long) {
-                $ranges = $hours[$short] ?? $hours[$long] ?? [];
-                if (!is_array($ranges)) continue;
-                foreach ($ranges as $range) {
-                    if (!is_array($range)) continue;
-                    $start = $range['start'] ?? $range[0] ?? null;
-                    $end = $range['end'] ?? $range[1] ?? null;
-                    if (!is_string($start) || !is_string($end)) continue;
-                    $result[] = ['day'=>$long,'start'=>$start,'end'=>$end];
-                }
-            }
-        }
-        $order = array_flip(array_values(self::DAYS));
-        usort($result, static fn (array $a, array $b): int =>
-            ($order[$a['day']] <=> $order[$b['day']]) ?: strcmp($a['start'], $b['start']));
-        return $result;
+        return BusinessHoursNormalizer::asApiList($hours);
     }
 
     /** @return array{payload:array<string,mixed>,agents:list<array<string,mixed>>,has_saved:bool} */
@@ -61,13 +31,16 @@ final class ExpressBusinessConfigurationReader
         $express = is_array($config['express'] ?? null) ? $config['express'] : [];
         $hasSaved = $express !== [];
 
-        $agentQuery = $pdo->prepare('SELECT id,name,is_default FROM ai_agents WHERE tenant_id=:tenant ORDER BY is_default DESC,id ASC');
+        $agentQuery = $pdo->prepare('SELECT id,name,is_default,business_hours_enabled,business_hours_json,
+            business_timezone,after_hours_message FROM ai_agents WHERE tenant_id=:tenant ORDER BY is_default DESC,id ASC');
         $agentQuery->execute(['tenant'=>$tenantId]);
+        $agentRows = $agentQuery->fetchAll(PDO::FETCH_ASSOC);
+        $primary = $agentRows[0] ?? [];
         $agents = array_map(static fn (array $a): array => [
             'id'=>\App\Core\PublicId::encode('agent', (int) $a['id']),
             'name'=>(string) $a['name'],
             'is_default'=>(int) ($a['is_default'] ?? 0) === 1,
-        ], $agentQuery->fetchAll(PDO::FETCH_ASSOC));
+        ], $agentRows);
         $companyQuery = $pdo->prepare('SELECT name FROM tenants WHERE id=:tenant LIMIT 1');
         $companyQuery->execute(['tenant'=>$tenantId]);
         $companyName = trim((string) ($companyQuery->fetchColumn() ?: 'sua empresa'));
@@ -78,8 +51,9 @@ final class ExpressBusinessConfigurationReader
         );
         $fieldsQuery->execute(['tenant'=>$tenantId]);
         $operationalFields = $fieldsQuery->fetchAll(PDO::FETCH_ASSOC);
-        $fields = $hasSaved ? $operationalFields : (array) ($config['triage_fields'] ?? []);
+        $fields = $operationalFields !== [] ? $operationalFields : (array) ($config['triage_fields'] ?? []);
         $customQuestions = [];
+        $protectedQuestions = [];
         $hasName = false;
         $hasPhone = false;
         foreach ($fields as $field) {
@@ -89,6 +63,9 @@ final class ExpressBusinessConfigurationReader
             if ($key === 'requester_name') $hasName = true;
             if ($key === 'contact_phone') $hasPhone = true;
             if (str_starts_with($key, 'express_') && $prompt !== '') $customQuestions[] = $prompt;
+            elseif (!in_array($key, ['requester_name','contact_phone'], true) && $prompt !== '') {
+                $protectedQuestions[] = ['key'=>$key, 'question'=>$prompt];
+            }
         }
         $capabilities = is_array($config['capabilities'] ?? null) ? $config['capabilities'] : [];
         // Capability edits made with Auto-Fix must be reflected by the editor too.
@@ -105,6 +82,13 @@ final class ExpressBusinessConfigurationReader
         foreach (['monday','tuesday','wednesday','thursday','friday'] as $day) {
             $defaultHours[] = ['day'=>$day,'start'=>'08:00','end'=>'18:00'];
         }
+        // O runtime é autoridade do expediente de conversa. O JSON da Expressa
+        // representa o último editor, mas pode estar desatualizado após onboarding.
+        $operationalHours = (int) ($primary['business_hours_enabled'] ?? 0) === 1
+            ? BusinessHoursNormalizer::normalize($primary['business_hours_json'] ?? null) : null;
+        $hoursForEditor = $operationalHours !== null
+            ? BusinessHoursNormalizer::asApiList($operationalHours)
+            : ($hasSaved ? self::normalizeHours($routing['business_hours'] ?? null) : $defaultHours);
         $payload = [
             'business_info' => [
                 'agent_name'=>(string) ($express['agent_name'] ?? ($agents[0]['name'] ?? ('Assistente ' . $companyName))),
@@ -117,14 +101,14 @@ final class ExpressBusinessConfigurationReader
                 'payment_methods'=>array_values((array) ($commercial['payment_methods'] ?? [])),
             ],
             'triage_config' => [
-                'collect_name'=>$hasSaved ? $hasName : true,
-                'collect_phone'=>$hasSaved ? $hasPhone : true,
+                'collect_name'=>$fields !== [] ? $hasName : true,
+                'collect_phone'=>$fields !== [] ? $hasPhone : true,
                 'custom_questions'=>$customQuestions,
             ],
             'routing_and_schedule' => [
-                'timezone'=>(string) ($routing['timezone'] ?? 'America/Sao_Paulo'),
+                'timezone'=>(string) (($primary['business_timezone'] ?? '') ?: ($routing['timezone'] ?? 'America/Sao_Paulo')),
                 // Se uma config existente estiver inválida, não inventar novos horários.
-                'business_hours'=>$hasSaved ? self::normalizeHours($routing['business_hours'] ?? null) : $defaultHours,
+                'business_hours'=>$hoursForEditor,
                 'out_of_hours_action'=>(string) ($routing['out_of_hours_action'] ?? 'capture_lead_and_promise_contact'),
                 'default_meeting_link'=>$routing['default_meeting_link'] ?? null,
             ],
@@ -137,6 +121,7 @@ final class ExpressBusinessConfigurationReader
                 'send_meeting_link_on_confirmation'=>(bool) ($capabilities['calendar.confirmation_link'] ?? false),
             ],
         ];
-        return ['payload'=>$payload, 'agents'=>$agents, 'has_saved'=>$hasSaved];
+        return ['payload'=>$payload, 'agents'=>$agents, 'has_saved'=>$hasSaved,
+            'protected_questions'=>$protectedQuestions];
     }
 }

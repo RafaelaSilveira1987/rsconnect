@@ -340,6 +340,9 @@ final class OnboardingGuideService
         }
 
         try {
+            $tenantLock = $this->pdo->prepare('SELECT id FROM tenants WHERE id=:tid FOR UPDATE');
+            $tenantLock->execute(['tid'=>$tenantId]);
+            if (!$tenantLock->fetchColumn()) throw new \RuntimeException('Empresa não encontrada.');
             $this->syncAssistedTriageAndWorkflow($tenantId, $selectedFields, $agendaEnabled);
             $this->saveAttendance($tenantId, $attendancePayload, $userId);
             $this->saveAgenda($tenantId, $agendaPayload, $userId);
@@ -435,6 +438,13 @@ final class OnboardingGuideService
         (new SlaPolicyService($this->pdo))->save($tenantId, $slaPayload, $userId);
 
         $this->applyStoredAttendanceToAgent($tenantId, null);
+        // Atualiza somente a projeção Expressa, sem permitir que o espelho do
+        // editor mais antigo se sobreponha ao expediente operacional.
+        if ($this->tableExists('tenant_agent_profiles')) {
+            (new TenantConfigurationProjectionService())->syncConversationHours(
+                $this->pdo, $tenantId, $timezone, $hoursJson
+            );
+        }
         $this->saveStep($tenantId, 'attendance_rules', 'complete', 'Horários, mensagem fora de horário e encaminhamento humano definidos para a operação.', $userId);
         $this->recordEvent($tenantId, $userId, 'onboarding.attendance_saved', 'Regras de atendimento preparadas para os agentes da empresa.', []);
     }

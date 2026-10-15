@@ -23,6 +23,7 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
       'primary_agent' => $primaryAgent,
       'agents_count' => count($agents),
       'has_saved' => !empty($setupHasSaved),
+      'protected_questions' => $setupProtectedQuestions ?? [],
   ], $jsonOptions) ?></script>
 
   <header class="ba-topbar">
@@ -97,6 +98,11 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
           </div>
           <div class="ba-inline-title"><div><h3>Perguntas personalizadas</h3><p>O assistente pergunta uma por vez.</p></div><button type="button" class="ba-text-button" id="baAddQuestion">+ Adicionar</button></div>
           <div id="baQuestions" class="ba-dynamic"></div>
+          <div id="baOtherQuestions" class="ba-soft-note" hidden>
+            <strong>Outras informações já definidas na Ativação Assistida</strong>
+            <p>Estas perguntas continuam válidas. Para alterá-las, use Ativação Assistida; salvar aqui não vai apagá-las.</p>
+            <ul id="baOtherQuestionsList"></ul>
+          </div>
         </div>
         <div class="ba-card">
           <div class="ba-card-head"><span class="ba-section-icon" aria-hidden="true">R$</span><div><h2>Valores e consultas online</h2><p>Defina como apresentar preços e como compartilhar o acesso à consulta.</p></div></div>

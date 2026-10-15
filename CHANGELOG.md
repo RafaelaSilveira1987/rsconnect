@@ -1,3 +1,14 @@
+## 2026-10-15 — Unificação progressiva das configurações (Etapa 1)
+
+- Normaliza expediente compacto, detalhado e JSON de API no mesmo serviço do runtime e readiness.
+- Atualiza a projeção Expressa quando o horário é alterado pela Ativação Assistida.
+- Troca os deletes globais da Configuração Expressa por reconciliação por chave; preserva perguntas e políticas de outros editores.
+- Pina a versão de Blueprint aplicada à empresa, evitando migração silenciosa ao publicar versões novas.
+- Adiciona auditoria somente-leitura de conflitos, com bloqueio de inconsistência crítica de aprovação humana.
+- Exibe perguntas gerenciadas em outra tela como somente leitura em Meu atendimento.
+- Documentação, limitações e homologação: docs/UNIFICACAO_CONFIGURACOES_ETAPA1_20261015.md.
+- Nenhuma migration nova; sem mudança nos comandos operacionais da Agenda.
+
 ## 2026-10-15 — Harmonização visual dos módulos de negócio e perguntas guiadas nos Blueprints
 
 - Estende a linguagem visual de “Meu atendimento” aos módulos de negócio mais acessados, por stylesheet isolado por rota.

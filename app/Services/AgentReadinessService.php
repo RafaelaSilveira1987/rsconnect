@@ -29,7 +29,26 @@ final class AgentReadinessService
     public function report(array $snapshot): array
     {
         $evaluation = ($this->evaluator ?? new AgentReadinessEvaluator())->evaluate($snapshot);
-        return ['agent_id' => PublicId::encode('agent', (int) ($snapshot['agent']['id'] ?? 0))] + $evaluation;
+        $consistency = (new ConfigurationConsistencyAuditService())->inspect($snapshot);
+        // Contradições de autorização crítica também bloqueiam ativação, mesmo
+        // quando cada checkbox isolado da prontidão parece válido.
+        foreach ($consistency['issues'] as $issue) {
+            $critical = $issue['severity'] === 'critical';
+            if ($critical) {
+                $evaluation['can_operate'] = false;
+                $evaluation['status'] = 'CONFIGURING';
+            }
+            $evaluation['readiness_score'] = max(0, $evaluation['readiness_score'] - ($critical ? 8 : 3));
+            $evaluation['checklist'][] = [
+                'category'=>'configuration_consistency',
+                'item'=>$critical ? 'Regras de atendimento conflitantes' : 'Configurações precisam ser alinhadas',
+                'status'=>$critical ? 'error' : 'warning',
+                'severity'=>$critical ? 'critical' : 'high',
+                'message'=>$issue['message'], 'auto_fix_available'=>false,
+            ];
+        }
+        return ['agent_id' => PublicId::encode('agent', (int) ($snapshot['agent']['id'] ?? 0))] + $evaluation
+            + ['consistency'=>['ok'=>$consistency['ok'],'issues'=>$consistency['issues']]];
     }
 
     /**
@@ -137,7 +156,16 @@ final class AgentReadinessService
         );
         $availabilityQuery->execute(['tid'=>$tenantId]);
 
+        $onboardingQuery = $pdo->prepare(
+            'SELECT business_timezone,business_hours_json,after_hours_message
+             FROM tenant_onboarding_settings WHERE tenant_id=:tid LIMIT 1'
+        );
+        $onboardingQuery->execute(['tid'=>$tenantId]);
+        $tenantQuery = $pdo->prepare('SELECT agent_blueprint_version_id FROM tenants WHERE id=:tid LIMIT 1');
+        $tenantQuery->execute(['tid'=>$tenantId]);
         return [
+            'onboarding_settings'=>$onboardingQuery->fetch(PDO::FETCH_ASSOC) ?: [],
+            'tenant'=>$tenantQuery->fetch(PDO::FETCH_ASSOC) ?: [],
             'pre_schedule_settings'=>$preScheduleQuery->fetch(PDO::FETCH_ASSOC) ?: [],
             'calendar_availability_settings'=>$availabilityQuery->fetch(PDO::FETCH_ASSOC) ?: [],
             'agent'=>$agent, 'profile'=>$profile,
