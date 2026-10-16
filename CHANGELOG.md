@@ -1,3 +1,10 @@
+## 2026-10-16 — Agenda Etapa 5: estados de horários no WhatsApp
+
+- Grade textual de horários publicados com ocupação, lotação, pré-reserva e bloqueio quando comprovados pela agenda.
+- Apenas vagas elegíveis recebem número selecionável; a reserva segue revalidada no serviço transacional.
+- Diagnóstico conservador para consultas sem vaga, diferenças de modalidade e inconsistências de vínculo.
+- Limite explícito de tamanho de mensagem com aviso de listagem parcial; sem alteração de tabelas.
+
 ## 2026-10-15 — Agenda Etapa 3: grade auditável de horários
 
 - Consulta visual de slots publicados exibe estados reais de capacidade (livre, lotado, pré-reservado, bloqueado, expirado, encerrado e inconsistência).

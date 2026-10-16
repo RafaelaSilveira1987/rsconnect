@@ -120,6 +120,12 @@ final class CalendarConversationService
                         (string) ($settings['no_availability_message'] ?? ''),
                         $this->noAvailabilityFallback($appointment, $isAvailabilityBrowse)
                     ));
+            // Quando a agenda publicada tem horários indisponíveis, mostre o
+            // diagnóstico factual. Não transforme vaga ausente em "ocupada".
+            $publishedGrid = (new ConversationalSlotGridService())->render($tenantId, $appointment, []);
+            if ($publishedGrid !== null && $constraintMessage === null) {
+                $message .= "\n\n" . $publishedGrid;
+            }
             $send = $this->sendAppointmentMessage(
                 $appointment,
                 $message,
@@ -231,7 +237,7 @@ final class CalendarConversationService
             ]);
         }
 
-        $message = $this->optionsMessage($settings, $appointment, $slots);
+        $message = $this->optionsMessage($settings, $appointment, $slots, $tenantId);
         $send = $this->sendAppointmentMessage(
             $appointment,
             $message,
@@ -1614,8 +1620,21 @@ final class CalendarConversationService
     }
 
     /** @param array<int,array<string,mixed>> $slots */
-    private function optionsMessage(array $settings, array $appointment, array $slots): string
+    private function optionsMessage(array $settings, array $appointment, array $slots, int $tenantId = 0): string
     {
+        // Grade de estados publicada: a numeração vem das opções já elegíveis.
+        // Horários lotados/bloqueados são apenas informativos, nunca selecionáveis.
+        if ($tenantId > 0) {
+            $publishedGrid = (new ConversationalSlotGridService())->render($tenantId, $appointment, $slots);
+            if ($publishedGrid !== null) {
+                return trim("Confira a disponibilidade consultada:
+
+" . $publishedGrid
+                    . "
+
+Responda com o número de uma opção disponível ou informe outro dia.");
+            }
+        }
         if ($this->isAvailabilityBrowseAppointment($appointment)) {
             return trim(
                 "Encontrei estes horários disponíveis:
