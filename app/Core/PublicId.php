@@ -55,6 +55,7 @@ final class PublicId
         'session' => 33,
         'record' => 34,
         'commercial_request' => 35,
+        'internal_slot' => 36,
     ];
 
     /**
@@ -135,6 +136,11 @@ final class PublicId
         ],
         '/calendar/ics' => [
             'id' => ['alias' => 'appointment_uuid', 'entity' => 'appointment'],
+        ],
+        // POST /calendar/availability/internal-slots/cancel usa calendar_internal_slots,
+        // não calendar_availability_slots (tipo global 'availability_slot').
+        '/calendar/availability/internal-slots/cancel' => [
+            'slot_id' => ['alias' => 'internal_slot_uuid', 'entity' => 'internal_slot'],
         ],
         '/central-operacao' => [
             'tenant' => ['alias' => 'tenant_uuid', 'entity' => 'tenant'],

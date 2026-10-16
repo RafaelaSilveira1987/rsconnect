@@ -425,32 +425,86 @@ final class InternalCalendarSlotService
         ];
     }
 
+    /**
+     * Retira uma vaga PUBLICADA da oferta sem apagar reservas nem compromissos.
+     * A trava da linha do horário serializa remoção e novas alocações, que
+     * também devem travar o horário antes de consumir sua capacidade.
+     *
+     * @return array{ok:bool,message:string}
+     */
     public function cancelSlot(int $tenantId, int $slotId): array
     {
         if ($tenantId < 1 || $slotId < 1 || !$this->tableAvailable()) {
             return ['ok' => false, 'message' => 'Horário inválido.'];
         }
-        if ($this->allocationTableAvailable()) {
+
+        // A rotina de limpeza já usa as travas apropriadas. Executá-la antes
+        // impede que pré-reservas expiradas bloqueiem uma remoção legítima.
+        $hasAllocations = $this->allocationTableAvailable();
+        if ($hasAllocations) {
             $this->releaseExpiredHolds($tenantId);
-            $count = Database::connection()->prepare(
-                'SELECT COUNT(*) FROM calendar_internal_slot_allocations
-                 WHERE tenant_id = :tenant_id AND slot_id = :slot_id AND state IN ("held","booked")'
+        }
+
+        $pdo = Database::connection();
+        if ($pdo->inTransaction()) {
+            return ['ok' => false, 'message' => 'Operação temporariamente indisponível. Tente novamente.'];
+        }
+
+        try {
+            $pdo->beginTransaction();
+            $select = $pdo->prepare(
+                'SELECT status, hold_appointment_id FROM calendar_internal_slots
+                 WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE'
             );
-            $count->execute(['tenant_id' => $tenantId, 'slot_id' => $slotId]);
-            if ((int) $count->fetchColumn() > 0) {
-                return ['ok' => false, 'message' => 'Este horário possui pessoas pré-reservadas ou confirmadas e não pode ser removido.'];
+            $select->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
+            $slot = $select->fetch(PDO::FETCH_ASSOC);
+            if (!$slot || !in_array((string) ($slot['status'] ?? ''), ['available', 'blocked'], true)) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'Este horário não está mais disponível para remoção. Atualize a lista.'];
             }
+
+            if ($hasAllocations) {
+                $count = $pdo->prepare(
+                    'SELECT COUNT(*) FROM calendar_internal_slot_allocations
+                     WHERE tenant_id = :tenant_id AND slot_id = :slot_id AND state IN ("held","booked")'
+                );
+                $count->execute(['tenant_id' => $tenantId, 'slot_id' => $slotId]);
+                if ((int) $count->fetchColumn() > 0) {
+                    $pdo->rollBack();
+                    return ['ok' => false, 'message' => 'Este horário possui pré-reservas ou confirmações e não pode ser removido.'];
+                }
+            } elseif (!empty($slot['hold_appointment_id'])) {
+                // Instalações antigas não possuem alocações por capacidade.
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'Este horário possui uma reserva e não pode ser removido.'];
+            }
+
+            $update = $pdo->prepare(
+                'UPDATE calendar_internal_slots
+                 SET status = "cancelled", hold_appointment_id = NULL,
+                     hold_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND tenant_id = :tenant_id AND status IN ("available","blocked")'
+            );
+            $update->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
+            if ($update->rowCount() !== 1) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'O horário mudou durante a operação. Atualize a lista.'];
+            }
+
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            return ['ok' => false, 'message' => 'Não foi possível remover o horário. Verifique as reservas e tente novamente.'];
         }
-        $statement = Database::connection()->prepare(
-            'UPDATE calendar_internal_slots
-             SET status = "cancelled", hold_appointment_id = NULL, hold_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id AND tenant_id = :tenant_id AND status IN ("available","blocked")'
-        );
-        $statement->execute(['id' => $slotId, 'tenant_id' => $tenantId]);
-        if ($statement->rowCount() < 1) {
-            return ['ok' => false, 'message' => 'Este horário já está reservado, confirmado ou não pode mais ser removido.'];
+
+        // Auditoria é posterior ao commit; não desfaz uma remoção concluída.
+        try {
+            Audit::log('calendar.internal_slot_cancelled', ['slot_id' => $slotId], $tenantId);
+        } catch (Throwable) {
+            // Não transmitir falha de auditoria como falha de remoção já efetivada.
         }
-        Audit::log('calendar.internal_slot_cancelled', ['slot_id' => $slotId], $tenantId);
         return ['ok' => true, 'message' => 'Horário removido da disponibilidade.'];
     }
 

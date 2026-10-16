@@ -194,8 +194,17 @@ final class CalendarAvailabilityController
         Csrf::validate($_POST['_token'] ?? null);
         $tenantId = $this->resolveTenantFromPost();
         $slotId = (int) ($_POST['slot_id'] ?? 0);
-        $result = (new InternalCalendarSlotService())->cancelSlot($tenantId, $slotId);
-        Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Horário processado.'));
+
+        if ($tenantId < 1 || $slotId < 1) {
+            Flash::set('warning', 'Empresa ou horário inválido. Atualize a lista.');
+        } else {
+            try {
+                $result = (new InternalCalendarSlotService())->cancelSlot($tenantId, $slotId);
+                Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) ($result['message'] ?? 'Horário processado.'));
+            } catch (Throwable) {
+                Flash::set('error', 'Não foi possível remover o horário. Tente novamente.');
+            }
+        }
         $this->redirect('/calendar?section=availability&tab=availability&tenant_id=' . $tenantId . '#horarios-liberados');
     }
 

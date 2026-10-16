@@ -38,6 +38,7 @@ final class TenantIsolationService
         'department' => 'service_departments',
         'privacy_request' => 'privacy_requests',
         'availability_slot' => 'calendar_availability_slots',
+        'internal_slot' => 'calendar_internal_slots',
         'prompt_version' => 'ai_agent_prompt_versions',
         'credential' => 'ai_provider_credentials',
         'message' => 'conversation_messages',
