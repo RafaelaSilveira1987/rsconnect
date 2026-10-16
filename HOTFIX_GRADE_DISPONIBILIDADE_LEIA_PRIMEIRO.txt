@@ -1,0 +1,10 @@
+RS CONNECT — HOTFIX DA GRADE DE HORÁRIOS / 15-10-2026
+
+1. Faça backup completo do código e banco.
+2. Para versão Agenda Etapa 2, aplique o PATCH com as mesmas pastas relativas.
+3. Sem migrations novas. Se houver OPcache, recarregue PHP-FPM/aplicação.
+4. Execute o teste calendar-daily-grid-completeness-20261015.php.
+5. Homologue no WhatsApp e MySQL com vagas livres, ocupadas, modalidade e antecedência.
+6. Não libera confirmação/cancelamento/reagendamento além das permissões atuais.
+
+Documentação: docs/HOTFIX_GRADE_DISPONIBILIDADE_20261015.md

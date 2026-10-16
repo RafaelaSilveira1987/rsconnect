@@ -142,6 +142,9 @@ final class PublicId
         '/calendar/availability/internal-slots/cancel' => [
             'slot_id' => ['alias' => 'internal_slot_uuid', 'entity' => 'internal_slot'],
         ],
+        '/calendar/availability/internal-slots/reconcile' => [
+            'slot_id' => ['alias' => 'internal_slot_uuid', 'entity' => 'internal_slot'],
+        ],
         '/central-operacao' => [
             'tenant' => ['alias' => 'tenant_uuid', 'entity' => 'tenant'],
         ],

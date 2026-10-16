@@ -1,0 +1,15 @@
+RS CONNECT — FASE 3: NOVA INTERFACE DE CONFIGURAÇÃO + PRONTIDÃO
+
+1. Backup do banco e dos arquivos antes de atualizar.
+2. Aplique o ZIP completo em homologação, ou copie os arquivos do PATCH sobre a versão Fase 2.
+3. Faça login como empresa com onboarding.manage.
+4. Abra: /onboarding/express (ou 'Preparar atendimento' no menu lateral).
+5. Preencha os três primeiros passos, revise e clique em Salvar configuração.
+6. Se existir um agente, o painel de prontidão buscará o diagnóstico real da API.
+7. Se não existir agente, crie e vincule o WhatsApp no fluxo já existente.
+8. Não ative o atendimento sem validar checklist, agenda e confirmação humana.
+
+ATENÇÃO: Reaplicar configurações substitui triagem e workflow tenant-wide (Fase 1).
+O wizard não ativa o atendimento e Auto-Fix depende de permissões específicas.
+
+Documentação: docs/FASE3_WIZARD_PRONTIDAO_FRONTEND.md

@@ -1,0 +1,11 @@
+RS CONNECT — UNIFICAÇÃO PROGRESSIVA DAS CONFIGURAÇÕES — ETAPA 1
+
+BASE: rs-connect-layout-unificado-blueprints-guiados-completo.zip, 15/10/2026.
+1) BACKUP de banco e arquivos antes de atualizar.
+2) Preferir patch em ambiente de homologação; manter customizações locais.
+3) Não exige migration. Não altera a agenda nem ativa assistentes.
+4) Executar: php tests/Feature/configuration-unification-20261015-smoke.php
+5) Auditar empresa: php scripts/audit-tenant-config.php --tenant=ID
+6) Validar duas telas e conflitos reais com MySQL antes da produção.
+
+A documentação completa está em docs/UNIFICACAO_CONFIGURACOES_ETAPA1_20261015.md.

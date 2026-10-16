@@ -1,0 +1,13 @@
+RS CONNECT - UNIFICACAO DAS MODALIDADES ONLINE/PRESENCIAL - 15/10/2026
+
+Base: rs-connect-hotfix-comercial-fonte-unica-completo.zip
+
+1. Fazer backup completo antes de aplicar.
+2. Aplicar o patch apenas sobre a ultima versao comercial; caso contrario,
+   usar o pacote completo em homologacao (preservar .env e volumes).
+3. Conferir Meu atendimento > Regras de atendimento > Como acontecem os atendimentos?.
+4. Salvar, recarregar, conferir local/dias/meio online e revisar no Admin.
+5. Nao altera confirmacao humana, slots, agenda nem workflow automaticamente.
+
+Guia: docs/UNIFICACAO_MODALIDADES_MEU_ATENDIMENTO_20261015.md
+Homologacao integrada com MySQL/WhatsApp/Calendar ainda pendente.

@@ -1,0 +1,8 @@
+RS Connect — Agenda, Etapa 4: conciliação de vínculos entre compromissos e horários.
+
+ATENÇÃO: aplique somente sobre a versão mais recente do hotfix de compromisso sem alocação.
+Antes de atualizar: BACKUP do código e do banco.
+Não é necessário executar migrations novas.
+Fluxo: Agenda -> Disponibilidades -> Conflito -> Conferir e vincular (pela equipe).
+Um caso ambíguo permanece bloqueado, sem ajuste automático.
+Detalhes: docs/AGENDA_ETAPA4_CONCILIACAO_COMPROMISSOS_20261015.md

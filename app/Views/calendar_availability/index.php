@@ -1045,8 +1045,35 @@ $requestInsight = static function (array $request): string {
                                         <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span><?php if ($capacityTotal > 1): ?><span class="badge"><?= (int) $occupiedCount ?>/<?= (int) $capacityTotal ?> ocupadas · <?= (int) $remainingCapacity ?> ofertável(is)</span><?php endif; ?></div>
                                         <strong><?= View::e(($publishedSlot['owner_name'] ?? '') ?: 'Disponibilidade geral da empresa') ?></strong>
                                         <?php if ($publishedStatus === 'conflict'): ?><small class="muted-text">Existe compromisso confirmado ou agendado neste intervalo sem vínculo com a vaga publicada. Não ofertar até conciliar a agenda.</small><?php elseif (!empty($publishedSlot['conflict_check_failed'])): ?><small class="muted-text">Não foi possível conferir os compromissos. Atualize a página; este horário não deve ser ofertado.</small><?php endif; ?>
+                                        <?php if ($publishedStatus === 'conflict' && $canManage): ?>
+                                            <?php $review = $reconciliationPreviews[(int) ($publishedSlot['id'] ?? 0)] ?? null; ?>
+                                            <?php if (is_array($review)): ?>
+                                                <?php if (!empty($review['allowed'])): ?>
+                                                    <div class="message-info" style="margin-top:9px;padding:10px">
+                                                        <strong>Conferir e vincular compromissos</strong>
+                                                        <?php foreach (($review['appointments'] ?? []) as $candidate): ?>
+                                                            <div><small>#<?= (int) $candidate['id'] ?> · <?= View::e((string) ($candidate['title'] ?? 'Compromisso')) ?> · <?= View::e((string) ($candidate['status'] ?? '')) ?></small></div>
+                                                        <?php endforeach; ?>
+                                                        <form method="post" action="<?= View::e(Router::url('/calendar/availability/internal-slots/reconcile')) ?>"
+                                                              onsubmit="return confirm('Confirma que os compromissos listados pertencem a este horário, profissional e modalidade? A capacidade será recalculada.');">
+                                                            <?= Csrf::input() ?>
+                                                            <input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>">
+                                                            <input type="hidden" name="slot_id" value="<?= (int) ($publishedSlot['id'] ?? 0) ?>">
+                                                            <?php foreach (($review['ids'] ?? []) as $candidateId): ?>
+                                                                <input type="hidden" name="appointment_ids[]" value="<?= (int) $candidateId ?>">
+                                                            <?php endforeach; ?>
+                                                            <button class="btn btn-small btn-secondary" type="submit" style="margin-top:7px">Conferir e vincular</button>
+                                                        </form>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <small class="muted-text">Conciliação manual necessária: <?= View::e((string) ($review['reason'] ?? 'Situação ambígua')) ?></small>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <small class="muted-text">Vínculo pendente: atualize ou refine os filtros para conferir.</small>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
                                         <?php if (!empty($publishedSlot['notes'])): ?><small><?= View::e((string) $publishedSlot['notes']) ?></small><?php endif; ?>
-                                        <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> confirmada(s)</small><?php elseif ($rawSlotStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
+                                        <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> compromisso(s) ocupando vaga</small><?php elseif ($rawSlotStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
                                     </div>
                                     <div class="availability-slot-actions">
                                         <?php if ($canManage && in_array($rawSlotStatus, ['available', 'blocked'], true) && $publishedStatus !== 'conflict' && empty($publishedSlot['conflict_check_failed'])): ?>

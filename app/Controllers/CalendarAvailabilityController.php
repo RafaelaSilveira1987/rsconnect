@@ -19,6 +19,7 @@ use App\Services\InternalCalendarSlotService;
 use App\Services\ProfessionalCalendarService;
 use App\Services\PublishedSlotStatusService;
 use App\Services\PublishedSlotAppointmentConflictService;
+use App\Services\PublishedSlotReconciliationService;
 use PDO;
 use Throwable;
 
@@ -73,6 +74,27 @@ final class CalendarAvailabilityController
             }
             unset($publishedSlot);
         }
+        $reconciliationPreviews = [];
+        $requestedTab = strtolower(trim((string) ($_GET['tab'] ?? 'overview')));
+        $fromFilter = (string) ($_GET['availability_from'] ?? '');
+        $toFilter = (string) ($_GET['availability_to'] ?? '');
+        $fromFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $fromFilter) ? $fromFilter : '';
+        $toFilter = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $toFilter) ? $toFilter : '';
+        if ($tenantId > 0 && $requestedTab === 'availability' && Auth::can('calendar.manage')) {
+            $reconciler = new PublishedSlotReconciliationService();
+            $checked = 0;
+            foreach ($publishedSlots as $slot) {
+                if ((string) ($slot['display_availability']['state'] ?? '') !== 'conflict' || $checked >= 30) {
+                    continue;
+                }
+                $date = substr((string) ($slot['starts_at'] ?? ''), 0, 10);
+                if (($fromFilter !== '' && $date < $fromFilter) || ($toFilter !== '' && $date > $toFilter)) {
+                    continue;
+                }
+                $reconciliationPreviews[(int) $slot['id']] = $reconciler->preview($tenantId, (int) $slot['id']);
+                ++$checked;
+            }
+        }
 
         $activeTab = strtolower(trim((string) ($_GET['tab'] ?? 'overview')));
         if (!in_array($activeTab, ['overview', 'availability', 'preschedules', 'settings'], true)) {
@@ -95,6 +117,7 @@ final class CalendarAvailabilityController
             'maintenance' => $dashboard['maintenance'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
             'publishedSlots' => $publishedSlots,
+            'reconciliationPreviews' => $reconciliationPreviews,
             'publishedSlotsTruncated' => $publishedSlotsTruncated,
             'professionalCalendarSettings' => $tenantId > 0 ? $professionalCalendarService->tenantSettings($tenantId) : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false],
             'professionalProfiles' => $tenantId > 0 ? $professionalCalendarService->teamProfiles($tenantId) : [],
@@ -217,6 +240,20 @@ final class CalendarAvailabilityController
         $this->redirect('/calendar?section=availability&tab=availability&tenant_id=' . $tenantId . '#horarios-liberados');
     }
 
+
+    public function reconcileInternalSlot(): void
+    {
+        Csrf::validate($_POST['_token'] ?? null);
+        $tenantId = $this->resolveTenantFromPost();
+        $slotId = (int) ($_POST['slot_id'] ?? 0);
+        $ids = $_POST['appointment_ids'] ?? [];
+        if (!is_array($ids)) {
+            $ids = [];
+        }
+        $result = (new PublishedSlotReconciliationService())->reconcile($tenantId, $slotId, $ids);
+        Flash::set(!empty($result['ok']) ? 'success' : 'warning', (string) $result['message']);
+        $this->redirect('/calendar?section=availability&tab=availability&tenant_id=' . $tenantId . '#horarios-liberados');
+    }
 
     public function saveProfessionalSettings(): void
     {

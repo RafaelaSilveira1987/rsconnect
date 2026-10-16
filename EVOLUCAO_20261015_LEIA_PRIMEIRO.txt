@@ -1,0 +1,12 @@
+RS CONNECT — PADRONIZAÇÃO VISUAL + BLUEPRINTS GUIADOS (15/10/2026)
+
+BASE: rs-connect-ativacao-unificada-blueprints-completo.zip (14/10/2026)
+
+1. Faça backup dos arquivos e do banco MySQL.
+2. Se já estiver na base acima, aplique o patch incremental na raiz.
+3. Limpe o OPcache e atualize a página com Ctrl+F5.
+4. Teste as páginas de negócio e o editor em ambiente de homologação.
+5. Modelos publicados não atualizam automaticamente empresas existentes.
+6. Essa atualização não cria tabelas nem modifica regras de agenda e webhook.
+
+Documentação: docs/EVOLUCAO_LAYOUT_E_BLUEPRINTS_20261015.md
