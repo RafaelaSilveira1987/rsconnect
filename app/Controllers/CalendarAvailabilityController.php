@@ -18,6 +18,7 @@ use App\Services\CalendarGoogleLifecycleService;
 use App\Services\InternalCalendarSlotService;
 use App\Services\ProfessionalCalendarService;
 use App\Services\PublishedSlotStatusService;
+use App\Services\PublishedSlotAppointmentConflictService;
 use PDO;
 use Throwable;
 
@@ -59,7 +60,15 @@ final class CalendarAvailabilityController
             }
             $presenter = new PublishedSlotStatusService();
             $hasAllocations = $internalSlotService->allocationTableAvailable();
+            $conflicts = (new PublishedSlotAppointmentConflictService())->counts(
+                $tenantId,
+                array_map(static fn (array $slot): int => (int) ($slot['id'] ?? 0), $publishedSlots),
+                $hasAllocations
+            );
             foreach ($publishedSlots as &$publishedSlot) {
+                $publishedSlot['unlinked_appointment_count'] = $conflicts === null
+                    ? 0 : (int) ($conflicts[(int) ($publishedSlot['id'] ?? 0)] ?? 0);
+                $publishedSlot['conflict_check_failed'] = $conflicts === null;
                 $publishedSlot['display_availability'] = $presenter->describe($publishedSlot, $localNow, $hasAllocations);
             }
             unset($publishedSlot);

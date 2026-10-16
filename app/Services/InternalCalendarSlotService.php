@@ -463,6 +463,16 @@ final class InternalCalendarSlotService
                 return ['ok' => false, 'message' => 'Este horário não está mais disponível para remoção. Atualize a lista.'];
             }
 
+            // O calendário pode conter um compromisso confirmado/manual sem
+            // alocação: não remover a disponibilidade sobreposta por engano.
+            $unlinked = (new PublishedSlotAppointmentConflictService())->counts(
+                $tenantId, [$slotId], $hasAllocations, $pdo
+            );
+            if ($unlinked === null || (int) ($unlinked[$slotId] ?? 0) > 0) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'Este horário tem compromisso sem vínculo ou não pôde ser conferido. Revise a agenda antes de remover.'];
+            }
+
             if ($hasAllocations) {
                 $count = $pdo->prepare(
                     'SELECT COUNT(*) FROM calendar_internal_slot_allocations
@@ -637,6 +647,14 @@ final class InternalCalendarSlotService
             if (!$slot) {
                 $pdo->rollBack();
                 return ['ok' => false, 'message' => 'O horário liberado não existe mais. Faça uma nova consulta.'];
+            }
+            // Compatibilidade com compromissos criados diretamente no calendário.
+            $unlinked = (new PublishedSlotAppointmentConflictService())->counts(
+                $tenantId, [$internalSlotId], false, $pdo
+            );
+            if ($unlinked === null || (int) ($unlinked[$internalSlotId] ?? 0) > 0) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'Já existe compromisso neste intervalo sem reserva vinculada. Solicite conferência da agenda.'];
             }
             $status = (string) ($slot['status'] ?? '');
             $heldBySame = $status === 'held' && (int) ($slot['hold_appointment_id'] ?? 0) === $appointmentId;
@@ -955,6 +973,16 @@ final class InternalCalendarSlotService
             if (!$slot || in_array((string) ($slot['status'] ?? ''), ['cancelled', 'blocked', 'expired'], true)) {
                 $pdo->rollBack();
                 return ['ok' => false, 'message' => 'O horário não está mais disponível. Faça uma nova consulta.'];
+            }
+
+            // Falha fechada: compromissos confirmados diretamente no calendário
+            // não podem ser consumidos por uma nova reserva de capacidade.
+            $unlinked = (new PublishedSlotAppointmentConflictService())->counts(
+                $tenantId, [$internalSlotId], true, $pdo
+            );
+            if ($unlinked === null || (int) ($unlinked[$internalSlotId] ?? 0) > 0) {
+                $pdo->rollBack();
+                return ['ok' => false, 'message' => 'Há compromisso na agenda sem vínculo com esta vaga. Confira antes de reservar.'];
             }
 
             // Limpeza LOCAL ao slot sob lock; a limpeza global anterior podia

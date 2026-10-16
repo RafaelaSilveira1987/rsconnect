@@ -14,7 +14,7 @@ final class PublishedSlotStatusService
 {
     /**
      * @param array<string,mixed> $slot Linha de InternalCalendarSlotService::listSlots()
-     * @return array{state:string,label:string,capacity:int,occupied:int,remaining:int,held:int,booked:int,offerable:bool}
+     * @return array{state:string,label:string,capacity:int,occupied:int,remaining:int,held:int,booked:int,unlinked:int,offerable:bool}
      */
     public function describe(array $slot, string $localNow, bool $allocationsAvailable): array
     {
@@ -36,22 +36,41 @@ final class PublishedSlotStatusService
             $remaining = $occupied > 0 ? 0 : 1;
         }
 
+        $unlinked = max(0, (int) ($slot['unlinked_appointment_count'] ?? 0));
+        $conflictCheckFailed = !empty($slot['conflict_check_failed']);
+        // Compromissos sem vínculo são registrados na contagem VISUAL, mas não
+        // se transformam em capacidade ofertável até uma conciliação explícita.
+        $displayOccupied = min($capacity, $occupied + $unlinked);
         $state = 'unknown';
-        if ($rawStatus === 'blocked') {
+        if ($conflictCheckFailed) {
+            $state = 'unknown';
+        } elseif ($rawStatus === 'blocked') {
             $state = 'blocked';
         } elseif (in_array($rawStatus, ['expired', 'cancelled'], true)) {
             $state = 'expired';
         } elseif (!in_array($rawStatus, ['available', 'held', 'booked'], true)
             || ($allocationsAvailable && ($occupied > $capacity || $occupied !== ($held + $booked)
                 || (in_array($rawStatus, ['held', 'booked'], true) && $occupied === 0)))) {
-            $state = 'unknown';
+            $unlinked = max(0, (int) ($slot['unlinked_appointment_count'] ?? 0));
+        $conflictCheckFailed = !empty($slot['conflict_check_failed']);
+        // Compromissos sem vínculo são registrados na contagem VISUAL, mas não
+        // se transformam em capacidade ofertável até uma conciliação explícita.
+        $displayOccupied = min($capacity, $occupied + $unlinked);
+        $state = 'unknown';
         } elseif ($this->validSqlDate((string) ($slot['ends_at'] ?? ''))
             && $this->validSqlDate($localNow)
             && (string) $slot['ends_at'] <= $localNow) {
             $state = 'past';
         } elseif (!$this->validSqlDate((string) ($slot['starts_at'] ?? ''))
             || !$this->validSqlDate((string) ($slot['ends_at'] ?? ''))) {
-            $state = 'unknown';
+            $unlinked = max(0, (int) ($slot['unlinked_appointment_count'] ?? 0));
+        $conflictCheckFailed = !empty($slot['conflict_check_failed']);
+        // Compromissos sem vínculo são registrados na contagem VISUAL, mas não
+        // se transformam em capacidade ofertável até uma conciliação explícita.
+        $displayOccupied = min($capacity, $occupied + $unlinked);
+        $state = 'unknown';
+        } elseif ($unlinked > 0) {
+            $state = 'conflict';
         } elseif ($remaining === 0) {
             $state = $held > 0 ? 'held' : 'occupied';
         } else {
@@ -66,16 +85,18 @@ final class PublishedSlotStatusService
             'expired' => 'Expirado/removido',
             'past' => 'Horário encerrado',
             'unknown' => 'Verificar situação',
+            'conflict' => 'Conflito com agendamento',
         ];
         $offerable = $state === 'available';
         return [
             'state' => $state,
             'label' => $labels[$state],
             'capacity' => $capacity,
-            'occupied' => min($capacity, $occupied),
+            'occupied' => $displayOccupied,
             'remaining' => $offerable ? $remaining : 0,
             'held' => $held,
             'booked' => $booked,
+            'unlinked' => $unlinked,
             'offerable' => $offerable,
         ];
     }

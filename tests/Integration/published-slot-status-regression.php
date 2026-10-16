@@ -31,11 +31,17 @@ $cases = [
     'legado_lotado' => [array_merge($base, ['status' => 'booked']), false, 'occupied', 0],
     'legado_pre_reservado' => [array_merge($base, ['status' => 'held']), false, 'held', 0],
     'legado_disponivel' => [$base, false, 'available', 1],
+    'confirmado_sem_alocacao' => [array_merge($base, ['unlinked_appointment_count' => 1]), true, 'conflict', 0],
+    'confirmado_sobre_duas_alocacoes' => [array_merge($base, ['occupied_count' => 2, 'booked_count' => 2, 'unlinked_appointment_count' => 1]), true, 'conflict', 0],
+    'falha_conferencia_banco' => [array_merge($base, ['conflict_check_failed' => true]), true, 'unknown', 0],
 ];
 foreach ($cases as $name => [$input, $hasAllocations, $state, $remaining]) {
     $result = $projector->describe($input, $now, $hasAllocations);
     if ($result['state'] !== $state || $result['remaining'] !== $remaining) {
         throw new RuntimeException($name . ' failed: ' . json_encode($result, JSON_UNESCAPED_UNICODE));
+    }
+    if ($name === 'confirmado_sem_alocacao' && ($result['occupied'] !== 1 || $result['unlinked'] !== 1)) {
+        throw new RuntimeException('Confirmed appointment without allocation must appear as 1 occupied');
     }
     if ($result['offerable'] !== ($state === 'available')) {
         throw new RuntimeException($name . ' offerable inconsistency');

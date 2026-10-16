@@ -1002,3 +1002,10 @@ A migration coloca empresas existentes em `onboarding` por padrão. Isso é inte
 - Bloqueia chave criptografada ilegível (APP_KEY incorreta) e provedor sem implementação; não relaxa os demais requisitos críticos.
 - Avisos de ativação e checklist utilizam o termo voltado ao cliente “Serviço de respostas”.
 - Incluídos testes de fallback, isolamento entre provedores e não vazamento de chaves.
+
+## 2026-10-15 — Hotfix Disponibilidades x Compromissos
+
+- Identifica compromissos confirmados/agendados que se sobrepõem a horários publicados sem alocação naquele slot.
+- Bloqueia oferta/remover da vaga conflitante até revisão, sem apagar histórico ou inferir capacidade restante.
+- Exibe contagem de compromissos sobrepostos e explica divergência na própria grade.
+- Testes de regressão de projeção e proteção do fluxo, sem migration.

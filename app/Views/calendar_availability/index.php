@@ -48,8 +48,8 @@ $tabLabels = [
     'preschedules' => ['Pré-agendamentos', 'Buscas, escolhas e validações'],
     'settings' => ['Configurações', 'Regras, equipe e integrações'],
 ];
-$publishedStatusLabels = ['available' => 'Com vagas', 'occupied' => 'Lotado', 'held' => 'Pré-reservado', 'blocked' => 'Bloqueado', 'expired' => 'Expirado/removido', 'past' => 'Encerrado', 'unknown' => 'Verificar situação'];
-$publishedStatusClasses = ['available' => 'badge-success', 'occupied' => 'badge-danger', 'held' => 'badge-warning', 'blocked' => '', 'expired' => 'badge-danger', 'past' => '', 'unknown' => 'badge-warning'];
+$publishedStatusLabels = ['available' => 'Com vagas', 'occupied' => 'Lotado', 'held' => 'Pré-reservado', 'blocked' => 'Bloqueado', 'expired' => 'Expirado/removido', 'past' => 'Encerrado', 'unknown' => 'Verificar situação', 'conflict' => 'Conflito com agendamento'];
+$publishedStatusClasses = ['available' => 'badge-success', 'occupied' => 'badge-danger', 'held' => 'badge-warning', 'blocked' => '', 'expired' => 'badge-danger', 'past' => '', 'unknown' => 'badge-warning', 'conflict' => 'badge-danger'];
 $availabilityStatusFilter = strtolower(trim((string) ($_GET['availability_status'] ?? 'all')));
 $availabilityStatusFilter = in_array($availabilityStatusFilter, array_merge(['all'], array_keys($publishedStatusLabels)), true) ? $availabilityStatusFilter : 'all';
 $availabilityModalityFilter = strtolower(trim((string) ($_GET['availability_modality'] ?? 'all')));
@@ -1044,11 +1044,12 @@ $requestInsight = static function (array $request): string {
                                     <div class="availability-slot-details">
                                         <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span><?php if ($capacityTotal > 1): ?><span class="badge"><?= (int) $occupiedCount ?>/<?= (int) $capacityTotal ?> ocupadas · <?= (int) $remainingCapacity ?> ofertável(is)</span><?php endif; ?></div>
                                         <strong><?= View::e(($publishedSlot['owner_name'] ?? '') ?: 'Disponibilidade geral da empresa') ?></strong>
+                                        <?php if ($publishedStatus === 'conflict'): ?><small class="muted-text">Existe compromisso confirmado ou agendado neste intervalo sem vínculo com a vaga publicada. Não ofertar até conciliar a agenda.</small><?php elseif (!empty($publishedSlot['conflict_check_failed'])): ?><small class="muted-text">Não foi possível conferir os compromissos. Atualize a página; este horário não deve ser ofertado.</small><?php endif; ?>
                                         <?php if (!empty($publishedSlot['notes'])): ?><small><?= View::e((string) $publishedSlot['notes']) ?></small><?php endif; ?>
                                         <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> confirmada(s)</small><?php elseif ($rawSlotStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
                                     </div>
                                     <div class="availability-slot-actions">
-                                        <?php if ($canManage && in_array($rawSlotStatus, ['available', 'blocked'], true)): ?>
+                                        <?php if ($canManage && in_array($rawSlotStatus, ['available', 'blocked'], true) && $publishedStatus !== 'conflict' && empty($publishedSlot['conflict_check_failed'])): ?>
                                             <form method="post" action="<?= View::e(Router::url('/calendar/availability/internal-slots/cancel')) ?>" onsubmit="return confirm('Remover este horário da disponibilidade?');">
                                                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>"><input type="hidden" name="slot_id" value="<?= (int) ($publishedSlot['id'] ?? 0) ?>"><button class="btn btn-small btn-quiet" type="submit">Remover</button>
                                             </form>
