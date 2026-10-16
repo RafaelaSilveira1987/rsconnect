@@ -1,3 +1,10 @@
+## 16/10/2026 — Hotfix: continuidade da data/período na Agenda WhatsApp
+
+- Corrigida a perda de `17/10` quando o contato responde `pela manhã` em outra mensagem.
+- Consulta diária disponível com apenas uma data, após a triagem obrigatória; períodos não são convertidos em hora exata fictícia.
+- Preferência estruturada conciliada com pré-agendamento pendente, sem repetir perguntas nem reservar outro dia com uma hora exata antiga.
+- Nova regressão: `tests/Feature/agenda-date-period-continuation-20261016-smoke.php`.
+
 ## 2026-10-16 — Agenda Etapa 5: estados de horários no WhatsApp
 
 - Grade textual de horários publicados com ocupação, lotação, pré-reserva e bloqueio quando comprovados pela agenda.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 require_once __DIR__ . '/SchedulingPreferenceResolverService.php';
+require_once __DIR__ . '/SchedulingPreferenceContextService.php';
 
 use App\Core\Crypto;
 use App\Core\Database;
@@ -76,6 +77,16 @@ final class PreSchedulingService
             }
         }
         $intent = $this->detectIntent($content, $continuationContext);
+        // O contato pode responder data e período em mensagens separadas.
+        // Somente reaproveita o estado de um pré-agendamento pendente da MESMA
+        // conversa e empresa, nunca um histórico sem contexto de agenda.
+        if ($existing !== null && $this->hasAnyPreference($intent)) {
+            $priorPreference = trim(implode(' ', array_filter([
+                (string) ($existing['preferred_day_text'] ?? ''),
+                (string) ($existing['preferred_time_text'] ?? ''),
+            ])));
+            $intent = (new SchedulingPreferenceContextService())->mergeIntent($priorPreference, $intent);
+        }
         if (!$intent['has_intent']) {
             return $result;
         }
@@ -307,7 +318,7 @@ final class PreSchedulingService
         $this->markConversationIntent($pdo, $tenantId, $conversationId, $intent);
 
         if ($existing !== null) {
-            if ($this->hasFullPreference($intent)) {
+            if ($this->hasFullPreference($intent) && $this->hasExactSchedulingTime($intent)) {
                 $professionalService = new ProfessionalCalendarService();
                 $professionalSettings = $professionalService->tenantSettings($tenantId);
                 if (!empty($professionalSettings['enabled'])
@@ -355,6 +366,7 @@ final class PreSchedulingService
                 'message' => null,
             ];
             if ($this->hasFullPreference($intent)
+                || $this->hasDatePreference($intent)
                 || $this->isAvailabilityModality($this->intentSchedulingModality($intent))
                 || ($availabilityInquiry && $this->hasAnyPreference($intent))) {
                 $transition = $this->prepareExistingForNewPreference($pdo, $tenantId, $conversationId, $existing, $intent);
@@ -418,7 +430,7 @@ final class PreSchedulingService
             // apenas às segundas). Não inventamos um horário preferido só para satisfazer
             // o parser e não pedimos novamente um dado que o lead não precisa escolher
             // antes de ver as opções.
-            if ($availabilityInquiry && empty($update['has_full_preference'])) {
+            if (($availabilityInquiry || $this->hasDatePreference($intent)) && empty($update['has_full_preference'])) {
                 $browseAppointment = is_array($update['appointment'] ?? null) ? $update['appointment'] : $existing;
 
                 // Se o lead informou um dia (mas não um horário), valida a regra desse dia
@@ -469,7 +481,7 @@ final class PreSchedulingService
                     return $result;
                 }
 
-                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+                $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId, $intent);
                 $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
                 $result['date_time_question_error'] = $question['error'] ?? null;
                 $result['skip_ai'] = true;
@@ -544,7 +556,7 @@ final class PreSchedulingService
         $contact = $this->findContact($pdo, $tenantId, $contactId);
         $period = $this->periodFromIntent($intent, (int) ($settings['default_duration_minutes'] ?? 50));
 
-        if ($this->hasFullPreference($intent)) {
+        if ($this->hasFullPreference($intent) && $this->hasExactSchedulingTime($intent)) {
             $professionalService = new ProfessionalCalendarService();
             $professionalSettings = $professionalService->tenantSettings($tenantId);
             if (!empty($professionalSettings['enabled'])
@@ -720,7 +732,9 @@ final class PreSchedulingService
             return $result;
         }
 
-        if (!$this->hasFullPreference($intent)) {
+        // Uma data já é suficiente para CONSULTAR a grade do dia inteiro.
+        // Não obriga o contato a indicar horário específico antes de exibir vagas.
+        if (!$this->hasFullPreference($intent) && !$this->hasDatePreference($intent)) {
             $result['date_time_required'] = true;
             $result['availability_request_needed'] = false;
 
@@ -732,7 +746,7 @@ final class PreSchedulingService
                 return $result;
             }
 
-            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId);
+            $question = $this->sendDateTimeQuestion($pdo, $instance, $conversationId, $contactId, $incomingMessageId, $intent);
             $result['date_time_question_sent'] = (bool) ($question['ok'] ?? false);
             $result['date_time_question_error'] = $question['error'] ?? null;
             $result['skip_ai'] = true;
@@ -740,7 +754,7 @@ final class PreSchedulingService
             return $result;
         }
 
-        if ($this->hasFullPreference($intent)) {
+        if ($this->hasFullPreference($intent) || $this->hasDatePreference($intent)) {
             $appointment = [
                 'id' => $appointmentId,
                 'tenant_id' => $tenantId,
@@ -1561,6 +1575,17 @@ final class PreSchedulingService
             || ((string) ($intent['preferred_time'] ?? '')) !== '';
     }
 
+    private function hasExactSchedulingTime(array $intent): bool
+    {
+        return preg_match('/^(?:[01]?\d|2[0-3]):[0-5]\d$/', (string) ($intent['preferred_time'] ?? '')) === 1;
+    }
+
+    private function hasDatePreference(array $intent): bool
+    {
+        return trim((string) ($intent['preferred_date'] ?? '')) !== ''
+            || trim((string) ($intent['preferred_day'] ?? '')) !== '';
+    }
+
     private function hasFullPreference(array $intent): bool
     {
         $hasDateOrDay = ((string) ($intent['preferred_date'] ?? '')) !== '' || ((string) ($intent['preferred_day'] ?? '')) !== '';
@@ -1903,11 +1928,17 @@ final class PreSchedulingService
     }
 
     /** @return array{ok:bool,error:?string,external_id?:?string} */
-    private function sendDateTimeQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0): array
+    private function sendDateTimeQuestion(PDO $pdo, array $instance, int $conversationId, int $contactId, int $incomingMessageId = 0, array $intent = []): array
     {
         $settings = $this->settings((int) ($instance['tenant_id'] ?? 0));
         $message = trim((string) ($settings['collect_message'] ?? ''))
             ?: 'Certo. Me informe, por favor, o melhor dia e período ou horário para atendimento.';
+        // Quando o cliente já disse o período, só falta a data. Não repete as
+        // duas perguntas; quem já informou o dia é atendido pela consulta ampla.
+        if (preg_match('/\b(?:manha|manhã|tarde|noite|\d{1,2}:\d{2})\b/iu', (string) ($intent['preferred_time'] ?? ''))
+            && !$this->hasDatePreference($intent)) {
+            $message = 'Entendi a preferência de horário. Para qual dia você gostaria de consultar as vagas?';
+        }
 
         return $this->sendAgendaGateMessage(
             $pdo,

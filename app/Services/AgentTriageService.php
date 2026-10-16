@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+require_once __DIR__ . '/SchedulingPreferenceResolverService.php';
+require_once __DIR__ . '/SchedulingPreferenceContextService.php';
+
 use App\Core\Database;
 use PDO;
 use Throwable;
@@ -818,13 +821,18 @@ final class AgentTriageService
         }
 
         if ($this->hasSchedulePreference($normalized)) {
-            $collected['preferred_schedule'] = $this->extractSchedulePreference($contextText);
+            $collected['preferred_schedule'] = (new SchedulingPreferenceContextService())->mergeText(
+                (string) ($collected['preferred_schedule'] ?? ''),
+                $this->extractSchedulePreference($contextText)
+            );
         }
 
         if ($currentField !== null && $currentField !== '') {
             $value = $this->captureCurrentFieldValue($currentField, $latestMessage, $latestNormalized, $currentFieldDefinition);
             if ($value !== null && $value !== '') {
-                $collected[$currentField] = $value;
+                $collected[$currentField] = $currentField === 'preferred_schedule'
+                    ? (new SchedulingPreferenceContextService())->mergeText((string) ($collected[$currentField] ?? ''), (string) $value)
+                    : $value;
             }
         }
 
@@ -1183,7 +1191,8 @@ final class AgentTriageService
 
     private function hasSchedulePreference(string $normalized): bool
     {
-        return (bool) preg_match('/\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|amanha|amanhã|hoje|manha|manhã|tarde|noite)\b/u', $normalized)
+        return (bool) preg_match('/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/u', $normalized)
+            || (bool) preg_match('/\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|amanha|amanhã|hoje|manha|manhã|tarde|noite)\b/u', $normalized)
             || (bool) preg_match('/\b\d{1,2}(?::\d{2})?\s*h\b/u', $normalized)
             || (bool) preg_match('/\b\d{1,2}:\d{2}\b/u', $normalized);
     }
@@ -1376,7 +1385,9 @@ final class AgentTriageService
         }
 
         $candidate = $candidates[0];
-        $collected[(string) $candidate['field_key']] = $candidate['value'];
+        $collected[(string) $candidate['field_key']] = (string) $candidate['field_key'] === 'preferred_schedule'
+            ? (new SchedulingPreferenceContextService())->mergeText((string) ($collected['preferred_schedule'] ?? ''), (string) $candidate['value'])
+            : $candidate['value'];
         return ['collected' => $collected, 'field_key' => (string) $candidate['field_key']];
     }
 
