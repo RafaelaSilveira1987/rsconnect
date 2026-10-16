@@ -1,0 +1,13 @@
+RS CONNECT — AGENDA ETAPA 1 (15/10/2026)
+
+Patch sobre: rs-connect-modalidades-fonte-unica-completo.zip
+Escopo: autorização determinística e transições de confirmação/agendamento.
+
+1. Faça backup completo do servidor e banco.
+2. Instale somente após homologação em empresa de teste.
+3. Nenhuma migration nova.
+4. Execute: php tests/Feature/appointment-operation-policy-phase1-smoke.php
+5. Leia: docs/AGENDA_FASE1_OPERACOES_TRANSICOES_20261015.md
+
+NÃO LIBERA cancelamento/reagendamento automático, NÃO homologa
+concorrência em MySQL, nem sincronização externa Google Calendar.

@@ -1,0 +1,10 @@
+RS CONNECT — ETAPA 3 | GRADE DE STATUS DA AGENDA
+15/10/2026
+
+Use a instalação completa apenas em homologação ou aplique o patch incremental
+se a base instalada for rs-connect-hotfix-agenda-erro500-metodo-completo.zip.
+
+Esta atualização é SOMENTE LEITURA: melhora estados de disponibilidade no
+painel da Agenda interna. Não habilita cancelamento/reagendamento automático.
+
+Guia: docs/AGENDA_ETAPA3_GRADE_ESTADOS_20261015.md
