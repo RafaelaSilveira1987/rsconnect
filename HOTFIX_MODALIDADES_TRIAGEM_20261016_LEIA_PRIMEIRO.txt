@@ -1,0 +1,8 @@
+RS Connect - 16/10/2026
+Correção: não perguntar modalidade fora da Ordem do Atendimento e incluir dias online,
+endereço presencial, dias presenciais e textos de orientação no painel Meu Atendimento.
+
+Base exigida: rs-connect-hotfix-agenda-data-periodo-completo.zip.
+Leia docs/HOTFIX_MODALIDADES_TRIAGEM_DIAS_ONLINE_20261016.md.
+Faça backup, instale em homologação, valide operações de agenda e confirme o salvamento.
+Não requer migration; não habilita confirmação automática.

@@ -195,7 +195,11 @@ final class AiResponseContractService
                 $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
                 $availability = trim((string) ($appointment['availability_status'] ?? ''));
 
-                if (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+                $behavior = new AgentConversationBehaviorService();
+                $policy = $behavior->modalityPolicy($tenantId, $pdo);
+                $requiresModality = !empty($policy['requires_choice'])
+                    && $behavior->modalityRequiredBeforeSchedule($tenantId, $pdo);
+                if ($requiresModality && !in_array($modality, ['online', 'presencial', 'telefone'], true)) {
                     return trim((string) ($settings['modality_message'] ?? '')) ?: 'Você prefere atendimento online ou presencial?';
                 }
                 if ($day === '' || $time === '') {

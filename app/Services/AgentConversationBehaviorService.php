@@ -350,10 +350,17 @@ final class AgentConversationBehaviorService
             if (trim((string) ($online['channel'] ?? '')) !== '') {
                 $parts[] = 'meio: ' . trim((string) $online['channel']);
             }
+            $onlineDays = is_array($online['allowed_days'] ?? null) ? $online['allowed_days'] : [];
+            if ($onlineDays !== []) {
+                $parts[] = 'dias permitidos: ' . implode(', ', array_map([$this, 'dayLabel'], $onlineDays));
+            }
             if (trim((string) ($online['message'] ?? '')) !== '') {
                 $parts[] = trim((string) $online['message']);
             }
             $lines[] = '- Modalidade ' . implode(' · ', $parts) . '.';
+            if ($onlineDays !== []) {
+                $lines[] = '  Nunca ofereça atendimento online fora desses dias; confira também as vagas reais da Agenda.';
+            }
         }
 
         $presencial = $settings['modalities']['presencial'] ?? [];
@@ -968,9 +975,12 @@ final class AgentConversationBehaviorService
         $custom = trim((string) ($config['message'] ?? ''));
         $modalityLabel = $modality === 'presencial' ? 'presencial' : 'online';
         $dayText = $this->humanList($allowedLabels);
-        $message = $custom !== ''
-            ? $custom
-            : 'Para atendimento ' . $modalityLabel . ', os dias configurados são ' . $dayText . '.';
+        // O texto personalizado complementa a regra, mas não pode esconder quais
+        // dias são efetivamente permitidos nem transformar indisponibilidade em lotação.
+        $message = 'Para atendimento ' . $modalityLabel . ', os dias configurados são ' . $dayText . '.';
+        if ($custom !== '') {
+            $message .= ' ' . $custom;
+        }
         if (!str_contains($message, '?')) {
             $message = rtrim($message) . ' Você prefere um desses dias?';
         }
@@ -1053,15 +1063,9 @@ final class AgentConversationBehaviorService
         }
         $dayMap = [1 => 'mon', 2 => 'tue', 3 => 'wed', 4 => 'thu', 5 => 'fri', 6 => 'sat', 7 => 'sun'];
         return array_values(array_filter($slots, static function (array $slot) use ($days, $tz, $dayMap): bool {
-            // 36.39.1 — uma vaga publicada na Agenda interna já é uma liberação
-            // explícita daquele dia. Ela não pode ser descartada depois por uma regra
-            // genérica de dias da modalidade; a própria vaga (e sua modalidade) passa a
-            // ser a fonte mais específica. Regras de dias continuam valendo para vagas
-            // calculadas e para integrações externas.
-            if (trim((string) ($slot['source'] ?? '')) === 'internal_published') {
-                return true;
-            }
-
+            // Os dias permitidos são regra da empresa e prevalecem inclusive
+            // sobre vagas antigas publicadas fora desses dias. Publicar uma vaga
+            // não altera silenciosamente as escolhas feitas em Meu Atendimento.
             $startsAt = trim((string) ($slot['starts_at'] ?? $slot['start'] ?? ''));
             if ($startsAt === '') {
                 return false;

@@ -11,7 +11,7 @@ namespace App\Services;
  */
 final class ServiceModalityConfiguration
 {
-    /** @return array{mode:string,online_channel:string,online_message:string,presencial_location:string,presencial_days:list<string>,presencial_message:string} */
+    /** @return array{mode:string,online_channel:string,online_days:list<string>,online_message:string,presencial_location:string,presencial_days:list<string>,presencial_message:string} */
     public static function fromBehavior(array $behavior): array
     {
         // Leitura pura da configuração já persistida. Não normalizamos aqui:
@@ -36,12 +36,15 @@ final class ServiceModalityConfiguration
                 default => 'not_applicable',
             };
         }
-        $days = array_values(array_unique(array_filter((array) ($presencial['allowed_days'] ?? []),
+        $normalizeDays = static fn (array $days): array => array_values(array_unique(array_filter($days,
             static fn (mixed $day): bool => is_string($day)
                 && in_array($day, ['mon','tue','wed','thu','fri','sat','sun'], true))));
+        $days = $normalizeDays((array) ($presencial['allowed_days'] ?? []));
+        $onlineDays = $normalizeDays((array) ($online['allowed_days'] ?? []));
         return [
             'mode' => $selection,
             'online_channel' => (string) ($online['channel'] ?? ''),
+            'online_days' => $onlineDays,
             'online_message' => (string) ($online['message'] ?? ''),
             'presencial_location' => (string) ($presencial['location'] ?? ''),
             'presencial_days' => $days,
@@ -74,7 +77,7 @@ final class ServiceModalityConfiguration
             'enabled' => $online,
             'channel' => $selection['online_channel'],
             'location' => '',
-            'allowed_days' => [],
+            'allowed_days' => $selection['online_days'] ?? [],
             'message' => $selection['online_message'],
         ];
         $current['modalities']['presencial'] = [

@@ -532,10 +532,15 @@ $humanizeAgentRule = static function (string $key): string {
                                         <strong>Formas de atendimento controladas por Meu atendimento</strong>
                                         <span>As modalidades agora são configuradas uma única vez pela empresa. O editor avançado não modifica esses campos.</span>
                                         <p><b>Oferece:</b> <?= View::e(match ($mod['mode']) { 'online'=>'Somente online', 'presencial'=>'Somente presencial', 'both'=>'Online e presencial', default=>'Não se aplica' }) ?></p>
-                                        <?php if (in_array($mod['mode'], ['online','both'], true)): ?><p><b>Online:</b> <?= View::e($mod['online_channel']) ?></p><?php endif; ?>
+                                        <?php if (in_array($mod['mode'], ['online','both'], true)): ?>
+                                        <p><b>Online:</b> <?= View::e($mod['online_channel']) ?></p>
+                                        <p><b>Dias online:</b> <?= View::e($mod['online_days'] === [] ? 'Conforme vagas publicadas' : implode(', ', $mod['online_days'])) ?></p>
+                                        <?php if ($mod['online_message'] !== ''): ?><p><b>Orientação online:</b> <?= View::e($mod['online_message']) ?></p><?php endif; ?>
+                                        <?php endif; ?>
                                         <?php if (in_array($mod['mode'], ['presencial','both'], true)): ?>
                                         <p><b>Local:</b> <?= View::e($mod['presencial_location']) ?></p>
                                         <p><b>Dias presenciais:</b> <?= View::e(implode(', ', $mod['presencial_days'])) ?></p>
+                                        <?php if ($mod['presencial_message'] !== ''): ?><p><b>Orientação presencial:</b> <?= View::e($mod['presencial_message']) ?></p><?php endif; ?>
                                         <?php endif; ?>
                                         <?php if (!Auth::isSuperAdmin()): ?>
                                         <p><a href="<?= View::e(\App\Core\Router::url('/agents')) ?>">Abrir Meu atendimento</a></p>

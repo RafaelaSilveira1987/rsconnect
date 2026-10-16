@@ -174,6 +174,21 @@ final class ExpressOnboardingRequest
             $onlineMessage = $str($rawModality, 'online_message', "$path.online_message", 500, false) ?? '';
             $location = $str($rawModality, 'presencial_location', "$path.presencial_location", 300, false) ?? '';
             $presencialMessage = $str($rawModality, 'presencial_message', "$path.presencial_message", 500, false) ?? '';
+            // Payloads antigos não trazem online_days: lista vazia mantém o
+            // comportamento anterior (sem restrição extra por dia).
+            $onlineAllowed = $rawModality['online_days'] ?? [];
+            if (!is_array($onlineAllowed) || !array_is_list($onlineAllowed) || count($onlineAllowed) > 7) {
+                $errors["$path.online_days"] = 'Selecione dias válidos.';
+                $onlineAllowed = [];
+            }
+            foreach ($onlineAllowed as $idx => $value) {
+                if (!is_string($value) || !in_array($value, ['mon','tue','wed','thu','fri','sat','sun'], true)) {
+                    $errors["$path.online_days.$idx"] = 'Dia inválido.';
+                }
+            }
+            if (count(array_unique($onlineAllowed)) !== count($onlineAllowed)) {
+                $errors["$path.online_days"] = 'Dias repetidos.';
+            }
             $allowed = $rawModality['presencial_days'] ?? null;
             if (!is_array($allowed) || !array_is_list($allowed) || count($allowed) > 7) {
                 $errors["$path.presencial_days"] = 'Selecione dias válidos.';
@@ -196,6 +211,7 @@ final class ExpressOnboardingRequest
             }
             $modalities = [
                 'mode'=>$modalityMode, 'online_channel'=>$channel,
+                'online_days'=>array_values($onlineAllowed),
                 'online_message'=>$onlineMessage, 'presencial_location'=>$location,
                 'presencial_days'=>array_values($allowed),
                 'presencial_message'=>$presencialMessage,

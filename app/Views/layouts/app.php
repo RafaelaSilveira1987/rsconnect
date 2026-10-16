@@ -550,6 +550,6 @@ $svgIcon = static function (string $name): string {
 <!-- Marcadores históricos de regressão: app.js?v=36.20.6 app.js?v=36.20.7 app.js?v=36.20.8 app.js?v=36.20.9 -->
 <script src="<?= View::e(Router::url('/assets/js/app.js?v=36.41.8')) ?>" defer></script>
 <?php if (!empty($expressAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-express.js?v=1&rev=20261015flowfix')) ?>" defer></script><?php endif; ?>
-<?php if (!empty($businessDashboardAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-business.js?v=1&rev=20261015modalidades')) ?>" defer></script><?php endif; ?>
+<?php if (!empty($businessDashboardAssets)): ?><script src="<?= View::e(Router::url('/assets/js/agent-business.js?v=1&rev=20261016diasmodalidades')) ?>" defer></script><?php endif; ?>
 </body>
 </html>

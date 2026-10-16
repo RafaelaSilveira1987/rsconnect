@@ -119,8 +119,12 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
             <label class="ba-field">Como acontece (ex.: Google Meet, Zoom)
               <input class="ba-input" type="text" data-bind="service_modalities.online_channel" maxlength="180" placeholder="Ex.: Google Meet">
             </label>
-            <label class="ba-field">Informação adicional para o cliente (opcional)
-              <input class="ba-input" type="text" data-bind="service_modalities.online_message" maxlength="500" placeholder="Ex.: Enviamos o link depois da confirmação">
+            <fieldset class="ba-choice-group"><legend>Em quais dias há atendimento online?</legend>
+              <div class="ba-modality-days" id="baOnlineDays"></div>
+              <small>Sem seleção: os dias são definidos apenas pelas vagas da Agenda. Não cria horários automaticamente.</small>
+            </fieldset>
+            <label class="ba-field">Como o assistente deve explicar o atendimento online
+              <textarea class="ba-input" data-bind="service_modalities.online_message" maxlength="500" rows="3" placeholder="Ex.: As consultas online acontecem pelo Meet. O link é enviado após confirmação."></textarea>
             </label>
           </div>
           <div class="ba-modality-settings" id="baPresencialSettings" hidden>
@@ -131,11 +135,11 @@ $jsonOptions = JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLA
             <fieldset class="ba-choice-group"><legend>Em quais dias há atendimento presencial?</legend>
               <div class="ba-modality-days" id="baPresencialDays"></div>
             </fieldset>
-            <label class="ba-field">Informação adicional para o cliente (opcional)
-              <input class="ba-input" type="text" data-bind="service_modalities.presencial_message" maxlength="500" placeholder="Ex.: Atendimento presencial somente mediante confirmação">
+            <label class="ba-field">Como o assistente deve explicar o atendimento presencial
+              <textarea class="ba-input" data-bind="service_modalities.presencial_message" maxlength="500" rows="3" placeholder="Ex.: Atendemos presencialmente no endereço acima, somente nos dias selecionados."></textarea>
             </label>
           </div>
-          <div class="ba-soft-note" id="baModalitiesWarning" hidden>Para oferecer as duas formas, confira na Ativação Assistida se a preferência online/presencial é coletada antes de consultar a agenda. Alterar a forma de atendimento aqui não modifica automaticamente as perguntas.</div>
+          <div class="ba-soft-note" id="baModalitiesWarning" hidden>Ao oferecer as duas modalidades, a pergunta online/presencial só será obrigatória quando estiver marcada antes da Agenda na Ordem do Atendimento. Sem essa etapa, o sistema não pode confirmar uma escolha de modalidade por suposição.</div>
           <div class="ba-soft-note">Esses dias definem a modalidade presencial, não criam vagas. Duração, capacidade e aprovação continuam sob as regras da <a href="<?= View::e(Router::url('/calendar')) ?>">Agenda</a>. O link da consulta online é definido abaixo.</div>
         </div>
         <div class="ba-card">

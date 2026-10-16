@@ -700,10 +700,15 @@ final class CalendarConversationService
         string $content,
         int $incomingMessageId = 0
     ): array {
+        // "Gostaria de agendar uma consulta para 17/10" é início de consulta,
+        // não confirmação de um horário já escolhido. Encaminhe ao fluxo de busca
+        // que entende data/período, sem pedir modalidade ou bloquear a grade.
+        if ($this->isNewSchedulingRequest($content)) {
+            return $this->incomingResult(false, false, 'new_scheduling_request');
+        }
         // Sem slot real selecionado, respostas genéricas como "sim", "ok" ou
         // perguntas de disponibilidade NÃO são confirmações. A guarda só atua quando
-        // o contato pede explicitamente para confirmar/agendar um horário que ainda
-        // não foi tecnicamente selecionado.
+        // o contato pede explicitamente para confirmar um horário já escolhido.
         $decision = $this->confirmationDecision($content, false);
         if ($decision === '') {
             return $this->incomingResult(false, false, 'not_a_confirmation_guard');
@@ -729,10 +734,17 @@ final class CalendarConversationService
         $day = trim((string) ($appointment['preferred_day_text'] ?? ''));
         $time = trim((string) ($appointment['preferred_time_text'] ?? ''));
         $availabilityStatus = trim((string) ($appointment['availability_status'] ?? ''));
+        // A ausência de modalidade só impede a confirmação quando a empresa
+        // oferece escolha E a Ordem do Atendimento a exige antes da agenda.
+        // A existência de pré-agendamento legado não cria uma nova pergunta.
+        $behavior = new AgentConversationBehaviorService();
+        $modalityPolicy = $behavior->modalityPolicy($tenantId, $pdo);
+        $requiresModality = !empty($modalityPolicy['requires_choice'])
+            && $behavior->modalityRequiredBeforeSchedule($tenantId, $pdo);
 
         if ($decision === 'negative') {
             $message = 'Sem problema. Ainda não havia um horário confirmado. Me diga outro dia ou horário que você prefere.';
-        } elseif (!in_array($modality, ['online', 'presencial', 'telefone'], true)) {
+        } elseif ($requiresModality && !in_array($modality, ['online', 'presencial', 'telefone'], true)) {
             $message = 'Antes de confirmar, preciso saber a modalidade do atendimento: online ou presencial?';
         } elseif ($day === '' || $time === '') {
             $message = 'Ainda preciso do dia e do horário desejados antes de confirmar o agendamento.';
@@ -848,6 +860,14 @@ final class CalendarConversationService
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /** Pedido para iniciar uma consulta de vagas, nunca para confirmar reserva pendente. */
+    private function isNewSchedulingRequest(string $content): bool
+    {
+        $normalized = $this->normalize($content);
+        return preg_match('/\b(agendar|agende|marcar|marque)\b/u', $normalized) === 1
+            && preg_match('/\b(confirmo|confirmar|confirma|confirmado)\b/u', $normalized) !== 1;
     }
 
     private function confirmationDecision(string $content, bool $allowBareAffirmative = true): string

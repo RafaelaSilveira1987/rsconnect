@@ -53,6 +53,17 @@ final class ExistingAppointmentConversationService
             return $this->result(true, true, 'already_handled');
         }
 
+        // Respostas da triagem de uma NOVA consulta nunca podem ser interpretadas
+        // como pedido para consultar compromissos anteriores. Isso também permite
+        // abandonar uma desambiguação antiga sem expor outros agendamentos.
+        if ($this->isFirstConsultationTriageAnswer($content)) {
+            $pending = $this->pendingDisambiguation($pdo, $tenantId, $conversationId);
+            if ($pending !== null) {
+                $this->markDisambiguationResolved($pdo, $tenantId, $conversationId, 0, 'new_booking');
+            }
+            return $this->result(false, false, 'new_booking_first_consultation_answer');
+        }
+
         $appointments = $this->findRelevantAppointments($pdo, $tenantId, $contactId, $conversationId);
         $pendingDisambiguation = $this->pendingDisambiguation($pdo, $tenantId, $conversationId);
         $appointment = null;
@@ -368,7 +379,7 @@ final class ExistingAppointmentConversationService
     public function detectIntent(string $content, bool $presencePending = false): string
     {
         $text = $this->normalize($content);
-        if ($text === '') {
+        if ($text === '' || $this->isFirstConsultationTriageAnswer($content)) {
             return '';
         }
 
@@ -441,7 +452,26 @@ final class ExistingAppointmentConversationService
         return '';
     }
 
-    /** @return array<string,mixed>|null */
+    /**
+     * Distingue a resposta à pergunta "É a sua primeira consulta?" de uma
+     * solicitação de CONSULTA de compromisso já marcado. Não intercepta frases
+     * com intenção explícita de cancelamento, remarcação ou consulta de status.
+     */
+    private function isFirstConsultationTriageAnswer(string $content): bool
+    {
+        $text = $this->normalize($content);
+        if (!preg_match('/\bprimeira\s+consulta\b/u', $text)) {
+            return false;
+        }
+        if (preg_match('/\b(cancelar|cancelad[ao]|desmarcar|desmarcad[ao]|remarcar|remarcad[ao]|reagendar|reagendad[ao]|confirmad[ao]|marcad[ao]|agendad[ao]|onde|quando|qual\s+horario)\b/u', $text)) {
+            return false;
+        }
+        // Respostas positivas/negativas da triagem; não generalizar qualquer
+        // frase com "consulta", para preservar o lookup de compromisso real.
+        return (bool) preg_match('/^(?:(?:sim|nao|e|eh|sera|seria|essa|esta|a|minha|vai\s+ser|vai\s+ser\s+a)[,\s]+){0,4}(?:minha\s+|a\s+)?primeira\s+consulta\b/u', $text)
+            || (bool) preg_match('/^primeira\s+consulta\b/u', $text);
+    }
+
     /** @return list<array<string,mixed>> */
     private function findRelevantAppointments(PDO $pdo, int $tenantId, int $contactId, int $conversationId): array
     {
@@ -456,7 +486,12 @@ final class ExistingAppointmentConversationService
                  LEFT JOIN conversations c ON c.id = a.conversation_id AND c.tenant_id = a.tenant_id
                  LEFT JOIN users u ON u.id = a.owner_user_id AND u.tenant_id = a.tenant_id
                  WHERE a.tenant_id = :tenant_id
-                   AND (a.contact_id = :contact_id OR a.conversation_id = :conversation_id)
+                   AND (
+                       a.contact_id = :contact_id
+                       OR (a.contact_id IS NULL
+                           AND a.conversation_id = :conversation_id
+                           AND c.contact_id = :conversation_contact_id)
+                   )
                    AND a.status IN ("pre_scheduled","awaiting_approval","scheduled","confirmed")
                    AND COALESCE(a.ends_at, a.starts_at) >= NOW()
                  ORDER BY
@@ -475,6 +510,7 @@ final class ExistingAppointmentConversationService
                 'tenant_id' => $tenantId,
                 'contact_id' => $contactId,
                 'conversation_id' => $conversationId,
+                'conversation_contact_id' => $contactId,
             ]);
             return $statement->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
@@ -553,10 +589,8 @@ final class ExistingAppointmentConversationService
             if ($modality !== '') {
                 $parts[] = $modality;
             }
-            $owner = trim((string) ($appointment['owner_name'] ?? ''));
-            if ($owner !== '') {
-                $parts[] = $owner;
-            }
+            // Nunca divulgar nomes de pacientes, contatos ou profissionais na
+            // seleção de compromissos. Data, hora e modalidade bastam.
             $lines[] = ($index + 1) . '. ' . implode(' · ', $parts);
         }
         return implode("\n", $lines)

@@ -49,9 +49,10 @@
   // Os registros anteriores usam conversation_behavior. A leitura da API
   // já os converte para este formato, sem habilitar novas modalidades.
   if (!data.service_modalities || typeof data.service_modalities !== 'object') {
-    data.service_modalities = {mode:'not_applicable',online_channel:'',online_message:'',presencial_location:'',presencial_days:[],presencial_message:''};
+    data.service_modalities = {mode:'not_applicable',online_channel:'',online_days:[],online_message:'',presencial_location:'',presencial_days:[],presencial_message:''};
   }
   data.service_modalities.presencial_days ||= [];
+  data.service_modalities.online_days ||= [];
   const agent = initial.primary_agent || null;
   const canManage = root.dataset.canManage === '1';
   const canView = root.dataset.canView === '1';
@@ -161,7 +162,7 @@
     });
     updateName(); updatePrice(); renderHours(); renderQuestions(); renderFaq(); renderModalities();
   }
-  $$('[data-bind]').forEach(node => node.addEventListener(node.tagName === 'INPUT' && node.type !== 'checkbox' ? 'input' : 'change', () => {
+  $$('[data-bind]').forEach(node => node.addEventListener((node.tagName === 'TEXTAREA' || (node.tagName === 'INPUT' && node.type !== 'checkbox')) ? 'input' : 'change', () => {
     const value = node.type === 'checkbox' ? node.checked : node.value;
     set(data, node.dataset.bind, value);
     if (node.dataset.bind === 'service_modalities.mode') renderModalities();
@@ -185,18 +186,20 @@
     $('#baOnlineSettings').hidden = !['online','both'].includes(m.mode);
     $('#baPresencialSettings').hidden = !['presencial','both'].includes(m.mode);
     $('#baModalitiesWarning').hidden = m.mode !== 'both';
-    const host = $('#baPresencialDays'); host.replaceChildren();
-    for (const [day, label] of modalityDays) {
-      const wrap = make('label','ba-modality-day');
-      const check = make('input'); check.type = 'checkbox'; check.value = day;
-      check.checked = m.presencial_days.includes(day); check.disabled = !canManage;
-      check.addEventListener('change', () => {
-        m.presencial_days = check.checked
-          ? [...m.presencial_days,day].filter((value, idx, list) => list.indexOf(value) === idx)
-          : m.presencial_days.filter(value => value !== day);
-        markDirty();
-      });
-      wrap.append(check, make('span','',label)); host.append(wrap);
+    for (const [field, selector] of [['online_days','#baOnlineDays'],['presencial_days','#baPresencialDays']]) {
+      const host = $(selector); host.replaceChildren();
+      for (const [day, label] of modalityDays) {
+        const wrap = make('label','ba-modality-day');
+        const check = make('input'); check.type = 'checkbox'; check.value = day;
+        check.checked = m[field].includes(day); check.disabled = !canManage;
+        check.addEventListener('change', () => {
+          m[field] = check.checked
+            ? [...m[field],day].filter((value, idx, list) => list.indexOf(value) === idx)
+            : m[field].filter(value => value !== day);
+          markDirty();
+        });
+        wrap.append(check, make('span','',label)); host.append(wrap);
+      }
     }
   }
   function removeButton(label, handler) {
@@ -345,6 +348,7 @@
     }));
     if (result.service_modalities) {
       result.service_modalities.presencial_days = [...(result.service_modalities.presencial_days || [])].sort();
+      result.service_modalities.online_days = [...(result.service_modalities.online_days || [])].sort();
       for (const field of ['online_channel','online_message','presencial_location','presencial_message']) {
         result.service_modalities[field] = (result.service_modalities[field] || '').trim();
       }
