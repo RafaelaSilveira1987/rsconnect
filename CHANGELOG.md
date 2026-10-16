@@ -1,3 +1,9 @@
+## 2026-10-15 — Agenda Etapa 3: grade auditável de horários
+
+- Consulta visual de slots publicados exibe estados reais de capacidade (livre, lotado, pré-reservado, bloqueado, expirado, encerrado e inconsistência).
+- Painel não soma capacidade bloqueada/encerrada como vaga livre.
+- Regras operacionais de reserva, Google e WhatsApp permanecem inalteradas.
+
 ## 15/10/2026 — Fonte única das modalidades online e presencial (Meu atendimento)
 
 - Meu atendimento: escolha explícita de modalidade, meio online, local e dias presenciais.

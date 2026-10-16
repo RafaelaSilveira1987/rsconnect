@@ -17,6 +17,7 @@ use App\Services\CalendarClientCommunicationService;
 use App\Services\CalendarGoogleLifecycleService;
 use App\Services\InternalCalendarSlotService;
 use App\Services\ProfessionalCalendarService;
+use App\Services\PublishedSlotStatusService;
 use PDO;
 use Throwable;
 
@@ -44,10 +45,24 @@ final class CalendarAvailabilityController
         $professionalCalendarService = new ProfessionalCalendarService();
         $internalSlotService = new InternalCalendarSlotService();
         $publishedSlots = [];
+        $publishedSlotsTruncated = false;
         if ($tenantId > 0 && $internalSlotService->tableAvailable()) {
             $from = date('Y-m-d 00:00:00');
             $to = date('Y-m-d 23:59:59', strtotime('+60 days'));
             $publishedSlots = $internalSlotService->listSlots($tenantId, $from, $to, 0, true);
+            $publishedSlotsTruncated = count($publishedSlots) >= 1200;
+            $timezone = (string) ($dashboard['settings']['timezone'] ?? 'America/Sao_Paulo');
+            try {
+                $localNow = (new \DateTimeImmutable('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s');
+            } catch (Throwable) {
+                $localNow = (new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d H:i:s');
+            }
+            $presenter = new PublishedSlotStatusService();
+            $hasAllocations = $internalSlotService->allocationTableAvailable();
+            foreach ($publishedSlots as &$publishedSlot) {
+                $publishedSlot['display_availability'] = $presenter->describe($publishedSlot, $localNow, $hasAllocations);
+            }
+            unset($publishedSlot);
         }
 
         $activeTab = strtolower(trim((string) ($_GET['tab'] ?? 'overview')));
@@ -71,6 +86,7 @@ final class CalendarAvailabilityController
             'maintenance' => $dashboard['maintenance'] ?? [],
             'canManage' => Auth::can('calendar.manage'),
             'publishedSlots' => $publishedSlots,
+            'publishedSlotsTruncated' => $publishedSlotsTruncated,
             'professionalCalendarSettings' => $tenantId > 0 ? $professionalCalendarService->tenantSettings($tenantId) : ['enabled' => false, 'require_owner' => true, 'auto_from_conversation' => false],
             'professionalProfiles' => $tenantId > 0 ? $professionalCalendarService->teamProfiles($tenantId) : [],
             'calendarClientSettings' => $tenantId > 0 ? (new CalendarClientCommunicationService())->settings($tenantId) : [],

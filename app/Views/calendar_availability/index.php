@@ -48,8 +48,8 @@ $tabLabels = [
     'preschedules' => ['Pré-agendamentos', 'Buscas, escolhas e validações'],
     'settings' => ['Configurações', 'Regras, equipe e integrações'],
 ];
-$publishedStatusLabels = ['available' => 'Disponível', 'held' => 'Pré-reservado', 'booked' => 'Confirmado', 'blocked' => 'Bloqueado', 'expired' => 'Expirado'];
-$publishedStatusClasses = ['available' => 'badge-success', 'held' => 'badge-warning', 'booked' => 'badge-info', 'blocked' => '', 'expired' => 'badge-danger'];
+$publishedStatusLabels = ['available' => 'Com vagas', 'occupied' => 'Lotado', 'held' => 'Pré-reservado', 'blocked' => 'Bloqueado', 'expired' => 'Expirado/removido', 'past' => 'Encerrado', 'unknown' => 'Verificar situação'];
+$publishedStatusClasses = ['available' => 'badge-success', 'occupied' => 'badge-danger', 'held' => 'badge-warning', 'blocked' => '', 'expired' => 'badge-danger', 'past' => '', 'unknown' => 'badge-warning'];
 $availabilityStatusFilter = strtolower(trim((string) ($_GET['availability_status'] ?? 'all')));
 $availabilityStatusFilter = in_array($availabilityStatusFilter, array_merge(['all'], array_keys($publishedStatusLabels)), true) ? $availabilityStatusFilter : 'all';
 $availabilityModalityFilter = strtolower(trim((string) ($_GET['availability_modality'] ?? 'all')));
@@ -63,16 +63,16 @@ $allPublishedSlots = array_values(array_filter($publishedSlots, static fn (array
 $publishedSlotStats = array_fill_keys(array_keys($publishedStatusLabels), 0);
 $publishedSeatStats = ['capacity' => 0, 'occupied' => 0, 'remaining' => 0];
 foreach ($allPublishedSlots as $publishedSlotForStats) {
-    $statusForStats = (string) ($publishedSlotForStats['status'] ?? 'available');
-    if (array_key_exists($statusForStats, $publishedSlotStats)) $publishedSlotStats[$statusForStats]++;
-    $slotCapacityForStats = max(1, (int) ($publishedSlotForStats['capacity_total'] ?? 1));
-    $slotOccupiedForStats = max(0, min($slotCapacityForStats, (int) ($publishedSlotForStats['occupied_count'] ?? 0)));
-    $publishedSeatStats['capacity'] += $slotCapacityForStats;
-    $publishedSeatStats['occupied'] += $slotOccupiedForStats;
-    $publishedSeatStats['remaining'] += max(0, $slotCapacityForStats - $slotOccupiedForStats);
+    $projected = (array) ($publishedSlotForStats['display_availability'] ?? []);
+    $state = (string) ($projected['state'] ?? 'unknown');
+    if (isset($publishedSlotStats[$state])) $publishedSlotStats[$state]++;
+    // Somente as vagas comprovadamente ofertáveis entram na contagem de livres.
+    $publishedSeatStats['capacity'] += (int) ($projected['capacity'] ?? 0);
+    $publishedSeatStats['occupied'] += (int) ($projected['occupied'] ?? 0);
+    $publishedSeatStats['remaining'] += (int) ($projected['remaining'] ?? 0);
 }
 $visiblePublishedSlots = array_values(array_filter($allPublishedSlots, static function (array $slot) use ($availabilityStatusFilter, $availabilityModalityFilter, $availabilityOwnerFilter, $availabilityFromFilter, $availabilityToFilter): bool {
-    $status = (string) ($slot['status'] ?? 'available');
+    $status = (string) ($slot['display_availability']['state'] ?? 'unknown');
     $modality = (string) ($slot['modality'] ?? 'indefinida');
     $ownerId = (int) ($slot['owner_user_id'] ?? 0);
     $slotDate = substr((string) ($slot['starts_at'] ?? ''), 0, 10);
@@ -258,7 +258,7 @@ $requestInsight = static function (array $request): string {
             <?php else: ?>
                 <div><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong><span>disponíveis</span></div>
                 <div><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong><span>pré-reservados</span></div>
-                <div><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong><span>confirmados</span></div>
+                <div><strong><?= (int) ($publishedSlotStats['occupied'] ?? 0) ?></strong><span>lotados</span></div>
             <?php endif; ?>
         </div>
         <a class="btn btn-secondary" href="<?= View::e($tabUrl('availability')) ?>">Gerenciar disponibilidades</a>
@@ -948,18 +948,13 @@ $requestInsight = static function (array $request): string {
         <?php endif; ?>
 
         <div class="availability-status-strip" aria-label="Resumo dos horários publicados">
-            <?php if ($bookingCapacityMode === 'capacity'): ?>
-                <div><span>Capacidade total</span><strong><?= (int) $publishedSeatStats['capacity'] ?></strong></div>
-                <div><span>Ocupações</span><strong><?= (int) $publishedSeatStats['occupied'] ?></strong></div>
-                <div><span>Vagas livres</span><strong><?= (int) $publishedSeatStats['remaining'] ?></strong></div>
-                <div><span>Horários publicados</span><strong><?= count($allPublishedSlots) ?></strong></div>
-            <?php else: ?>
-                <div><span>Disponíveis</span><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong></div>
-                <div><span>Pré-reservados</span><strong><?= (int) ($publishedSlotStats['held'] ?? 0) ?></strong></div>
-                <div><span>Confirmados</span><strong><?= (int) ($publishedSlotStats['booked'] ?? 0) ?></strong></div>
-                <div><span>Bloqueados</span><strong><?= (int) ($publishedSlotStats['blocked'] ?? 0) ?></strong></div>
-            <?php endif; ?>
+            <div><span>Horários com vagas</span><strong><?= (int) ($publishedSlotStats['available'] ?? 0) ?></strong></div>
+            <div><span>Vagas potencialmente livres</span><strong><?= (int) $publishedSeatStats['remaining'] ?></strong></div>
+            <div><span>Lotados / pré-reservados</span><strong><?= (int) ($publishedSlotStats['occupied'] ?? 0) + (int) ($publishedSlotStats['held'] ?? 0) ?></strong></div>
+            <div><span>Bloqueados / encerrados / revisão</span><strong><?= (int) ($publishedSlotStats['blocked'] ?? 0) + (int) ($publishedSlotStats['expired'] ?? 0) + (int) ($publishedSlotStats['past'] ?? 0) + (int) ($publishedSlotStats['unknown'] ?? 0) ?></strong></div>
         </div>
+        <p class="muted-text" style="margin:8px 0 18px">Esta é a situação dos horários <strong>publicados</strong>, não uma autorização de agendamento. Antecedência, modalidade, conflitos e disponibilidade externa continuam sendo validados antes de oferecer uma vaga ao cliente. Horários não publicados não são classificados como ocupados.</p>
+        <?php if (!empty($publishedSlotsTruncated)): ?><div class="message-info">A consulta atingiu 1.200 horários nos próximos 60 dias. Filtre por data e profissional: a lista pode estar incompleta.</div><?php endif; ?>
 
         <?php if ($canManage): ?>
         <section class="availability-publisher-panel">
@@ -1036,22 +1031,24 @@ $requestInsight = static function (array $request): string {
                         <div class="availability-slot-card-list">
                             <?php foreach ($daySlots as $publishedSlot): ?>
                                 <?php
-                                    $publishedStatus = (string) ($publishedSlot['status'] ?? 'available');
+                                    $rawSlotStatus = (string) ($publishedSlot['status'] ?? 'available');
+                                    $display = (array) ($publishedSlot['display_availability'] ?? []);
+                                    $publishedStatus = (string) ($display['state'] ?? 'unknown');
                                     $publishedModality = match ((string) ($publishedSlot['modality'] ?? 'indefinida')) { 'online' => 'Online', 'presencial' => 'Presencial', 'telefone' => 'Telefone', default => 'Qualquer modalidade' };
                                     $capacityTotal = max(1, (int) ($publishedSlot['capacity_total'] ?? 1));
-                                    $occupiedCount = max(0, (int) ($publishedSlot['occupied_count'] ?? 0));
-                                    $remainingCapacity = max(0, $capacityTotal - $occupiedCount);
+                                    $occupiedCount = (int) ($display['occupied'] ?? 0);
+                                    $remainingCapacity = (int) ($display['remaining'] ?? 0);
                                 ?>
                                 <div class="availability-slot-card">
                                     <div class="availability-slot-time"><strong><?= View::e($date($publishedSlot['starts_at'] ?? null, 'H:i')) ?></strong><span>até <?= View::e($date($publishedSlot['ends_at'] ?? null, 'H:i')) ?></span></div>
                                     <div class="availability-slot-details">
-                                        <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span><?php if ($capacityTotal > 1): ?><span class="badge"><?= (int) $occupiedCount ?>/<?= (int) $capacityTotal ?> ocupadas · <?= (int) $remainingCapacity ?> livre(s)</span><?php endif; ?></div>
+                                        <div class="availability-slot-badges"><span class="badge <?= View::e($publishedStatusClasses[$publishedStatus] ?? '') ?>"><?= View::e($publishedStatusLabels[$publishedStatus] ?? $publishedStatus) ?></span><span class="badge badge-info"><?= View::e($publishedModality) ?></span><?php if ($capacityTotal > 1): ?><span class="badge"><?= (int) $occupiedCount ?>/<?= (int) $capacityTotal ?> ocupadas · <?= (int) $remainingCapacity ?> ofertável(is)</span><?php endif; ?></div>
                                         <strong><?= View::e(($publishedSlot['owner_name'] ?? '') ?: 'Disponibilidade geral da empresa') ?></strong>
                                         <?php if (!empty($publishedSlot['notes'])): ?><small><?= View::e((string) $publishedSlot['notes']) ?></small><?php endif; ?>
-                                        <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> confirmada(s)</small><?php elseif ($publishedStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
+                                        <?php if ($capacityTotal > 1 && (int) ($publishedSlot['held_count'] ?? 0) > 0): ?><small><?= (int) ($publishedSlot['held_count'] ?? 0) ?> vaga(s) em pré-reserva · <?= (int) ($publishedSlot['booked_count'] ?? 0) ?> confirmada(s)</small><?php elseif ($rawSlotStatus === 'held' && !empty($publishedSlot['hold_expires_at'])): ?><small>Pré-reserva até <?= View::e($date($publishedSlot['hold_expires_at'], 'H:i')) ?><?= !empty($publishedSlot['hold_appointment_title']) ? ' · ' . View::e((string) $publishedSlot['hold_appointment_title']) : '' ?></small><?php endif; ?>
                                     </div>
                                     <div class="availability-slot-actions">
-                                        <?php if ($canManage && in_array($publishedStatus, ['available', 'blocked'], true)): ?>
+                                        <?php if ($canManage && in_array($rawSlotStatus, ['available', 'blocked'], true)): ?>
                                             <form method="post" action="<?= View::e(Router::url('/calendar/availability/internal-slots/cancel')) ?>" onsubmit="return confirm('Remover este horário da disponibilidade?');">
                                                 <?= Csrf::input() ?><input type="hidden" name="tenant_id" value="<?= (int) $tenantId ?>"><input type="hidden" name="slot_id" value="<?= (int) ($publishedSlot['id'] ?? 0) ?>"><button class="btn btn-small btn-quiet" type="submit">Remover</button>
                                             </form>
