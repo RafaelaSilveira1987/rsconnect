@@ -419,12 +419,7 @@ final class CalendarController
             $appointmentId,
             $notificationContext
         );
-        $notificationOrchestrator->scheduleAppointmentReminder(
-            $tenantId,
-            $appointmentId,
-            $normalized['starts_at'],
-            $notificationContext
-        );
+        // Lembretes só são agendados após confirmação efetiva, nunca na criação.
         // 36.39.0: comunicação com o cliente é uma camada separada dos avisos internos.
         // O envio ao criar é opt-in; confirmações/lembretes seguem a configuração da Agenda.
         try {
@@ -904,6 +899,21 @@ final class CalendarController
                         $googleLifecycleService
                     );
                 }
+            }
+            if ($status === 'confirmed') {
+                // Só depois de persistir a aprovação e converter o pré-agendamento.
+                (new NotificationOrchestratorService())->scheduleAppointmentReminder(
+                    $tenantId,
+                    $appointmentId,
+                    (string) ($appointmentBefore['starts_at'] ?? ''),
+                    [
+                        'customer_name' => $this->contactName((int) ($appointmentBefore['contact_id'] ?? 0), $tenantId),
+                        'appointment_title' => trim((string) ($appointmentBefore['title'] ?? 'Compromisso')),
+                        'starts_at' => (string) ($appointmentBefore['starts_at'] ?? ''),
+                        'timezone' => (string) ($appointmentBefore['timezone'] ?? 'America/Sao_Paulo'),
+                        'conversation_id' => (int) ($appointmentBefore['conversation_id'] ?? 0),
+                    ]
+                );
             }
             $warnings = [];
             if ($googleReleaseWarning !== null) {

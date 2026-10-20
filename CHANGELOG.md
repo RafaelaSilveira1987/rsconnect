@@ -1,3 +1,9 @@
+## 20/10/2026 — Bloqueio de lembretes de pré-agendamentos sem aprovação
+
+- Lembretes de WhatsApp, pedidos de presença e lembretes de notificações só são elegíveis após confirmação efetiva e aprovação, quando necessária.
+- Confere o estado persistido também na hora do envio, impedindo entregas de jobs antigos pendentes.
+- Preserva avisos internos à equipe para pré-agendamentos aguardando validação.
+
 ## 16/10/2026 — Hotfix: continuidade da data/período na Agenda WhatsApp
 
 - Corrigida a perda de `17/10` quando o contato responde `pela manhã` em outra mensagem.

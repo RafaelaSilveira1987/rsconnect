@@ -327,12 +327,11 @@ final class NotificationDeliveryService
 
         if ($event === 'calendar.appointment.reminder' && $entityType === 'appointment') {
             $statement = Database::connection()->prepare(
-                'SELECT status, starts_at FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+                'SELECT status, is_pre_schedule, approval_status, starts_at FROM calendar_appointments WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
             );
             $statement->execute(['id' => $entityId, 'tenant_id' => $tenantId]);
             $appointment = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
-            $status = (string) ($appointment['status'] ?? '');
-            if (!in_array($status, ['scheduled', 'confirmed'], true)) {
+            if (!AppointmentReminderEligibilityService::isConfirmed($appointment)) {
                 return true;
             }
             $payload = json_decode((string) ($job['payload_json'] ?? ''), true);

@@ -261,6 +261,18 @@ final class NotificationOrchestratorService
     public function scheduleAppointmentReminder(int $tenantId, int $appointmentId, string $startsAt, array $context): array
     {
         try {
+            // Nunca agendar lembrete usando apenas o contexto fornecido pelo chamador.
+            // O estado persistido do compromisso prevalece sobre qualquer payload antigo.
+            $statement = Database::connection()->prepare(
+                'SELECT status, is_pre_schedule, approval_status
+                 FROM calendar_appointments
+                 WHERE id = :id AND tenant_id = :tenant_id LIMIT 1'
+            );
+            $statement->execute(['id' => $appointmentId, 'tenant_id' => $tenantId]);
+            $persisted = $statement->fetch(PDO::FETCH_ASSOC);
+            if (!$persisted || !AppointmentReminderEligibilityService::isConfirmed($persisted)) {
+                return ['queued' => 0, 'reason' => 'appointment_not_confirmed'];
+            }
             $rule = $this->rule($tenantId, 'calendar.appointment.reminder');
             if (empty($rule['enabled'])) {
                 return ['queued' => 0, 'reason' => 'disabled'];

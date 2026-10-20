@@ -2272,21 +2272,7 @@ Responda com o número ou com o horário que prefere."
                 'slot_id' => (int) ($slot['id'] ?? 0),
             ]
         );
-        $startsAt = trim((string) ($appointment['starts_at'] ?? $slot['starts_at'] ?? ''));
-        if ($startsAt !== '') {
-            (new NotificationOrchestratorService())->scheduleAppointmentReminder(
-                $tenantId,
-                (int) ($appointment['id'] ?? 0),
-                $startsAt,
-                [
-                    'customer_name' => $name,
-                    'appointment_title' => trim((string) ($appointment['title'] ?? 'Agendamento')),
-                    'starts_at' => $startsAt,
-                    'timezone' => (string) ($appointment['timezone'] ?? 'America/Sao_Paulo'),
-                    'conversation_id' => (int) ($appointment['conversation_id'] ?? 0),
-                ]
-            );
-        }
+        // Pré-reserva: somente alerta interno à equipe. Não agendar lembrete.
     }
 
     private function notifyFailure(int $tenantId, array $appointment, string $error): void

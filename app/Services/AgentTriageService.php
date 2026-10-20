@@ -849,6 +849,21 @@ final class AgentTriageService
         if ($message === '') {
             return null;
         }
+        // Respostas binárias devem seguir o TIPO/PERGUNTA da etapa atual.
+        // Modelos históricos cadastraram perguntas sim/não como texto e o filtro
+        // de respostas genéricas descartava "Sim"/"Não", repetindo a mesma etapa.
+        // Não infere resposta de campos de texto abertos nem de outras etapas.
+        if ($fieldKey !== 'is_for_self' && $this->isBinaryQuestionField($fieldDefinition)) {
+            $binary = $this->parseBinaryAnswer($normalized);
+            if ($binary !== null) {
+                $type = strtolower(trim((string) ($fieldDefinition['field_type'] ?? 'text')));
+                return $type === 'boolean' ? $binary : ($binary ? 'Sim' : 'Não');
+            }
+            // Campo binário não pode absorver texto livre incidental.
+            if (strtolower(trim((string) ($fieldDefinition['field_type'] ?? ''))) === 'boolean') {
+                return null;
+            }
+        }
         return match ($fieldKey) {
             'patient_age' => $this->extractAgeAnswer($message),
             'modality' => preg_match('/\bpresencial\b/u', $normalized) ? 'presencial' : (preg_match('/\bonline\b|\bmeet\b/u', $normalized) ? 'online' : null),
@@ -862,6 +877,51 @@ final class AgentTriageService
                 ? ($this->looksLikeDemandAnswer($message, $normalized) ? mb_substr($message, 0, 1200) : null)
                 : $this->captureConfiguredFreeTextValue($fieldKey, $message, $normalized, $fieldDefinition),
         };
+    }
+
+    /**
+     * Campos booleanos e perguntas históricas sim/não devem ser respondidos com
+     * valores binários. Não convertem um "sim" isolado em Demanda ou outro texto livre.
+     *
+     * Perguntas históricas são reconhecidas pela forma interrogativa, não pelo nicho
+     * nem pela chave do campo; perguntas abertas (como "Qual sua demanda?") ficam fora.
+     */
+    private function isBinaryQuestionField(?array $field): bool
+    {
+        if (!is_array($field)) {
+            return false;
+        }
+        $type = strtolower(trim((string) ($field['field_type'] ?? 'text')));
+        if ($type === 'boolean') {
+            return true;
+        }
+        $options = is_array($field['options'] ?? null) ? $field['options'] : [];
+        if (in_array(strtolower(trim((string) ($options['answer_type'] ?? ''))), ['boolean', 'yes_no'], true)) {
+            return true;
+        }
+        if (!in_array($type, ['text', 'textarea', 'select'], true)) {
+            return false;
+        }
+        $question = trim((string) ($field['prompt_text'] ?? ''));
+        if ($question === '' || !str_contains($question, '?')) {
+            return false;
+        }
+        $question = $this->normalize($question);
+        // Compatibilidade com formulários antigos sem `answer_type`, apenas para
+        // perguntas fechadas. A pergunta continua vindo do cadastro da empresa.
+        return preg_match('/^(e|eh|sera|foi|voce|ja|tem|possui|precisa|prefere|costuma|quer|pode|aceita|concorda|deseja|ha)\b/u', $question) === 1;
+    }
+
+    private function parseBinaryAnswer(string $normalized): ?bool
+    {
+        $normalized = trim($normalized);
+        if (preg_match('/^(sim|isso|isso mesmo|exatamente|correto|confirmo|afirmativo|e sim)(?:[\s,!.]|$)/u', $normalized)) {
+            return true;
+        }
+        if (preg_match('/^(nao|negativo|de forma alguma)(?:[\s,!.]|$)/u', $normalized)) {
+            return false;
+        }
+        return null;
     }
 
     /**

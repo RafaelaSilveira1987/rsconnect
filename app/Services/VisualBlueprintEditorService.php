@@ -38,7 +38,7 @@ final class VisualBlueprintEditorService
                 'prompt' => 'Prefere atendimento presencial ou online?',
             ],
             'first_consultation' => [
-                'label' => 'Primeiro atendimento', 'type' => 'text',
+                'label' => 'Primeiro atendimento', 'type' => 'boolean',
                 'prompt' => 'Será sua primeira consulta conosco?',
             ],
         ];

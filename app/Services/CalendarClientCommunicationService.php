@@ -266,7 +266,7 @@ final class CalendarClientCommunicationService
         if (empty($settings['ready'])) {
             return ['attempted' => false, 'queued' => 0, 'reason' => 'migration_required'];
         }
-        if ((string) ($appointment['status'] ?? '') !== 'confirmed') {
+        if (!AppointmentReminderEligibilityService::isConfirmed($appointment)) {
             return ['attempted' => false, 'queued' => 0, 'reason' => 'appointment_not_confirmed'];
         }
 
@@ -594,6 +594,9 @@ final class CalendarClientCommunicationService
 
     private function scheduleConfirmedJobs(array $appointment, array $settings): int
     {
+        if (!AppointmentReminderEligibilityService::isConfirmed($appointment)) {
+            return 0;
+        }
         $startsAt = trim((string) ($appointment['starts_at'] ?? ''));
         if ($startsAt === '') {
             return 0;
@@ -733,7 +736,7 @@ final class CalendarClientCommunicationService
             return true;
         }
         if (in_array($event, [self::EVENT_REMINDER, self::EVENT_PRESENCE_REQUEST, self::EVENT_CONFIRMED], true)) {
-            if ($status !== 'confirmed') {
+            if (!AppointmentReminderEligibilityService::isConfirmed($appointment)) {
                 return true;
             }
 

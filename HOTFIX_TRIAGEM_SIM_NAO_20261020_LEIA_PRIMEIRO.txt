@@ -1,0 +1,6 @@
+RS Connect — Resposta Sim/Não repetida e retomada da triagem
+
+Atualize dois serviços PHP (AgentTriageService, VisualBlueprintEditorService).
+Faça backup, valide a sintaxe PHP e homologue em conversa nova.
+Este hotfix não modifica o banco de dados, a Agenda, as filas nem os horários.
+Documentação: docs/HOTFIX_TRIAGEM_RESPOSTA_BINARIA_RETOMADA_20261020.md
