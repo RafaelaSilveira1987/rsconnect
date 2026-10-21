@@ -1,0 +1,22 @@
+RS CONNECT — CENTRAL DE TESTES AUTOMATIZADOS (2026-10-21)
+
+Esta atualização NÃO modifica o runtime de produção nem o banco.
+Adiciona: bin/qa.php, bin/qa-diff.php, testes novos, manifesto de testes,
+workflow GitHub Actions, scripts Composer e documentação.
+
+A PARTIR DA RAIZ DO PROJETO:
+  php bin/qa.php --suite=critical
+  php bin/qa.php --suite=lint
+  php bin/qa.php --suite=all
+
+Relatórios locais: storage/qa-reports/qa-<suite>.json e .xml
+
+BASE ANALISADA: rs-connect-hotfix-triagem-respostas-campos-20261021-completo.zip
+RESULTADOS DE REFERÊNCIA:
+  critical: 16 passaram / 0 falharam
+  lint: 633 passaram / 0 falharam
+  all: 222 passaram / 68 falharam (débito/diagnóstico pendente)
+
+IMPORTANTE: falhas históricas não foram escondidas. NÃO considere os
+processos homologados em MySQL/WhatsApp/Google Calendar por esses resultados.
+Consulte docs/PLANO_TESTES_AUTOMATIZADOS_20261021.md.

@@ -25,3 +25,9 @@ php tests/Feature/billing-plan-pricing-v362011-smoke.php
 ```
 
 Alguns testes históricos verificam documentação de versões antigas ou pendências já registradas. O executor retorna código diferente de zero quando qualquer caso falha, permitindo uso posterior em CI.
+
+## Central de qualidade (21/10/2026)
+
+A nova barreira é `php bin/qa.php --suite=critical`, que executa casos selecionados em subprocessos e reprova se detectar saída de erro interno, mesmo que o PHP encerre com exit 0.
+
+Para relatório amplo e análise dos testes históricos, execute `--suite=all`. Resultados ficam em `storage/qa-reports/` (JSON/JUnit). Consulte `docs/PLANO_TESTES_AUTOMATIZADOS_20261021.md` para os resultados de referência, limitações e integração restrita a homologação.

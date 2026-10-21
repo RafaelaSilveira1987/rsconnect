@@ -31,6 +31,12 @@
     "test:ent028": "php tests/Feature/ent028-webhook-security-smoke.php",
     "test:ent028-schema": "php tests/Feature/ent028-pagbank-schema-hotfix-smoke.php",
     "test:ent029": "php tests/Feature/ent029-secure-health-checks-smoke.php",
-    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php"
+    "test:ent030": "php tests/Feature/ent030-xss-svg-csp-smoke.php",
+    "qa:critical": "php bin/qa.php --suite=critical",
+    "qa:lint": "php bin/qa.php --suite=lint",
+    "qa:investigate": "php bin/qa.php --suite=investigate",
+    "qa:historical": "php bin/qa.php --suite=historical",
+    "qa:all": "php bin/qa.php --suite=all",
+    "qa:integration": "php bin/qa.php --suite=integration"
   }
 }

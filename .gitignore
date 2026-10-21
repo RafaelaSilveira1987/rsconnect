@@ -28,3 +28,5 @@ Thumbs.db
 *.tar.gz
 coverage/
 .phpunit.result.cache
+
+/storage/qa-reports/
