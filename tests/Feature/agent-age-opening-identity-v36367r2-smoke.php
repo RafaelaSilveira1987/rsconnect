@@ -54,7 +54,11 @@ $check(str_contains((string) ($approx['decision']['message'] ?? ''), 'idade exat
 
 $exact = $triage->simulateTurn($profile, $approx['state'], '30');
 $check((int) ($exact['collected']['patient_age'] ?? 0) === 30, 'Resposta curta "30" é aceita quando o campo atual é idade.');
-$check(($exact['decision']['evidence']['next_field'] ?? '') === 'modality', 'Após coletar a idade, o fluxo avança para o próximo campo em vez de perguntar idade novamente.');
+// A modalidade é desativada automaticamente quando o atendimento possui forma única
+// ou 'não se aplica'. Não exigimos que a triagem invente uma escolha.
+$check(($exact['state']['current_field_key'] ?? null) !== 'patient_age'
+    && !in_array('patient_age', $exact['missing'] ?? [], true),
+    'Após coletar a idade, o fluxo avança sem repetir a mesma pergunta.');
 
 $model = new AiModelService();
 $guard = new ReflectionMethod($model, 'applyCurrentTurnContinuityGuard');

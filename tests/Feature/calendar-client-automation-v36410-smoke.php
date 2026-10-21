@@ -26,6 +26,11 @@ $method->setAccessible(true);
 $skipMethod = new ReflectionMethod($service, 'shouldSkipJob');
 $skipMethod->setAccessible(true);
 
+// Datas dos jobs de lembrete devem ser futuras; casos vencidos são
+// deliberadamente bloqueados pelo runtime.
+$futureStart = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))
+    ->modify('+7 days')->format('Y-m-d H:i:s');
+
 $checks = [
     'pré-agendamento não exibe mais texto técnico original' => !str_contains($calendarView, 'Ver texto original para auditoria'),
     'configuração destaca confirmação imediata do agendamento' => str_contains($settingsView, 'Confirmação do agendamento')
@@ -49,17 +54,23 @@ $checks = [
     'pedido de presença prevalece quando coincide com lembrete' => str_contains($serviceSource, '$presenceSupersedesReminder')
         && str_contains($serviceSource, 'Sem mensagens duplicadas') === false,
     'pedido de presença vencido não é enviado depois que o cliente já respondeu' => $skipMethod->invoke($service,
-        ['event_key' => CalendarClientCommunicationService::EVENT_PRESENCE_REQUEST, 'expected_starts_at' => '2026-10-10 10:00:00'],
-        ['status' => 'confirmed', 'starts_at' => '2026-10-10 10:00:00', 'client_confirmation_status' => 'confirmed']
+        ['event_key' => CalendarClientCommunicationService::EVENT_PRESENCE_REQUEST, 'expected_starts_at' => $futureStart],
+        ['status' => 'confirmed', 'starts_at' => $futureStart, 'client_confirmation_status' => 'confirmed']
     ) === true,
     'lembrete é bloqueado se cliente já informou que não comparecerá' => $skipMethod->invoke($service,
-        ['event_key' => CalendarClientCommunicationService::EVENT_REMINDER, 'expected_starts_at' => '2026-10-10 10:00:00'],
-        ['status' => 'confirmed', 'starts_at' => '2026-10-10 10:00:00', 'client_confirmation_status' => 'declined']
+        ['event_key' => CalendarClientCommunicationService::EVENT_REMINDER, 'expected_starts_at' => $futureStart],
+        ['status' => 'confirmed', 'starts_at' => $futureStart, 'client_confirmation_status' => 'declined']
     ) === true,
     'lembrete continua válido depois de presença confirmada' => $skipMethod->invoke($service,
-        ['event_key' => CalendarClientCommunicationService::EVENT_REMINDER, 'expected_starts_at' => '2026-10-10 10:00:00'],
-        ['status' => 'confirmed', 'starts_at' => '2026-10-10 10:00:00', 'client_confirmation_status' => 'confirmed']
+        ['event_key' => CalendarClientCommunicationService::EVENT_REMINDER, 'expected_starts_at' => $futureStart],
+        ['status' => 'confirmed', 'starts_at' => $futureStart, 'client_confirmation_status' => 'confirmed']
     ) === false,
+    'job antigo já vencido é bloqueado mesmo após confirmação' => $skipMethod->invoke($service,
+        ['event_key' => CalendarClientCommunicationService::EVENT_REMINDER,
+         'expected_starts_at' => '2026-10-10 10:00:00'],
+        ['status' => 'confirmed', 'starts_at' => '2026-10-10 10:00:00',
+         'client_confirmation_status' => 'confirmed']
+    ) === true,
     'tela explica proteção contra disparo duplicado' => str_contains($settingsView, 'Sem mensagens duplicadas no mesmo instante'),
     'pacote mantém histórico da versão 36.41.1 e identifica a atual' => str_contains($version, 'RS Connect 36.41.1')
         && str_contains($version, 'RS Connect 36.41.2')

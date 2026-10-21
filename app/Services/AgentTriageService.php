@@ -196,7 +196,7 @@ final class AgentTriageService
         if ($schedulingIntent && $missingBeforeSchedule !== [] && !$handledByRule) {
             $collectionMessage = trim((string) ($missingBeforeSchedule[0]['prompt_text'] ?? '')) ?: 'Antes de consultar a agenda, preciso confirmar uma informação.';
             if ($nextField === 'patient_age' && $currentField === 'patient_age' && $this->isApproximateAgeAnswer($text)) {
-                $collectionMessage = rtrim($collectionMessage, " .?!") . '. Informe um valor exato em anos.';
+                $collectionMessage = 'Para continuar, preciso da idade exata em anos (por exemplo, 30).';
             }
             $decision = [
                 'allowed' => false,
@@ -962,6 +962,12 @@ final class AgentTriageService
         if (in_array(strtolower(trim((string) ($options['answer_type'] ?? ''))), ['boolean', 'yes_no'], true)) {
             return true;
         }
+        // Perguntas de Demanda são abertas, mesmo quando começam com "Tem ...?".
+        // O heurístico legado classificava "Tem acontecido alguma coisa que ...?"
+        // como booleano e guardava apenas "Sim", descartando o relato do paciente.
+        if ($this->isConfiguredDemandField((string) ($field['field_key'] ?? ''), $field)) {
+            return false;
+        }
         if (!in_array($type, ['text', 'textarea', 'select'], true)) {
             return false;
         }
@@ -970,6 +976,11 @@ final class AgentTriageService
             return false;
         }
         $question = $this->normalize($question);
+        // Perguntas com pedido de explicação não são Sim/Não, ainda que comecem
+        // com "Tem", "Você" ou "É". A etapa aberta deve preservar a fala inteira.
+        if (preg_match('/\b(o que|qual|quais|como|por que|porque|conte|descreva|explique|alguma coisa que|o motivo|a razao)\b/u', $question)) {
+            return false;
+        }
         // Compatibilidade com formulários antigos sem `answer_type`, apenas para
         // perguntas fechadas. A pergunta continua vindo do cadastro da empresa.
         return preg_match('/^(e|eh|sera|foi|voce|ja|tem|possui|precisa|prefere|costuma|quer|pode|aceita|concorda|deseja|ha)\b/u', $question) === 1;

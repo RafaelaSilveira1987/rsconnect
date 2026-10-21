@@ -33,7 +33,7 @@ $checks['opções existentes não exibem nomes'] = !str_contains($options, 'Nome
 $checks['opções existentes preservam data e hora'] = str_contains($options, '10:00') && str_contains($options, '09:00');
 
 $grid = new ConversationalSlotGridService();
-$date = '2026-10-17';
+$date = (new DateTimeImmutable('today', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days')->format('Y-m-d');
 $published = [];
 $eligible = [];
 foreach (['08:00', '09:00', '10:00', '11:00'] as $index => $time) {

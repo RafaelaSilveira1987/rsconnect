@@ -1,0 +1,12 @@
+RS Connect — QA Fase 1 (21/10/2026)
+
+Base: RS Connect 36.44.4 com executor QA.
+Instalação: fazer backup, aplicar o patch sobre a BASE informada, reiniciar/redeploy conforme seu procedimento.
+Sem migration nova e sem reset do banco.
+
+php bin/qa.php --suite=critical  # 26/26 na validação local
+php bin/qa.php --suite=all       # 232/292; 60 pendências ainda existentes
+php bin/qa.php --suite=lint      # 635/635 na validação local
+
+Veja docs/QA_FASE1_TRIAGEM_AGENDA_SEGURANCA_20261021.md.
+NÃO é uma homologação integrada de produção.

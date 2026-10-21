@@ -2,10 +2,18 @@
 
 declare(strict_types=1);
 
+if (!function_exists('mb_strtolower')) { function mb_strtolower(string $v, ?string $e=null): string { return strtolower($v); } }
+if (!function_exists('mb_substr')) { function mb_substr(string $v,int $st,?int $l=null,?string $e=null):string { return $l===null?substr($v,$st):substr($v,$st,$l); } }
+require dirname(__DIR__,2) . '/bootstrap.php';
 $root = dirname(__DIR__, 2);
 $pre = (string) file_get_contents($root . '/app/Services/PreSchedulingService.php');
 $conversation = (string) file_get_contents($root . '/app/Services/CalendarConversationService.php');
 $version = (string) file_get_contents($root . '/app/Services/AppVersionService.php');
+$preService = new App\Services\PreSchedulingService();
+$availabilityQuestion = new ReflectionMethod($preService, 'asksAvailabilityOptions');
+$hasDate = new ReflectionMethod($preService, 'hasDatePreference');
+$hasFull = new ReflectionMethod($preService, 'hasFullPreference');
+$hasExactTime = new ReflectionMethod($preService, 'hasExactSchedulingTime');
 
 $checks = [
     'pergunta de disponibilidade não vira confirmação por conter sim + horário' =>
@@ -20,10 +28,12 @@ $checks = [
         && str_contains($pre, 'availability_browse')
         && str_contains($pre, 'Perguntas como "qual horário tem disponível?" significam CONSULTAR a'),
     'browse consulta agenda real sem exigir horário inventado' =>
-        str_contains($pre, 'availability_request_needed')
-        && str_contains($pre, 'availabilityInquiry && empty')
-        && str_contains($pre, 'has_full_preference')
-        && str_contains($conversation, 'Encontrei estes horários disponíveis:'),
+        $availabilityQuestion->invoke($preService, 'Quais horários estão disponíveis?')
+        && $hasDate->invoke($preService, ['preferred_date' => '28/10/2026'])
+        && !$hasFull->invoke($preService, ['preferred_date' => '28/10/2026'])
+        && !$hasExactTime->invoke($preService, ['preferred_time' => 'manha'])
+        && str_contains($pre, '$this->hasFullPreference($intent) || $this->hasDatePreference($intent)')
+        && str_contains($pre, "$" . "result['availability_request_needed'] = true"),
     'slots continuam filtrados pelas regras da modalidade' =>
         str_contains($conversation, 'filterSlotsForAppointment($tenantId, $appointment, $slots)'),
     'versão do pacote atualizada sem migration nova' =>

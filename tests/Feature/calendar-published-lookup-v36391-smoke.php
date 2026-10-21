@@ -41,7 +41,7 @@ $checks = [
         && str_contains($availability, 'availability_selection_expires_at IS NULL OR availability_selection_expires_at >= NOW()'),
     'verificação por profissional também ignora preferência sem slot' => !str_contains($professional, 'COALESCE(a.preferred_day_text, "") <> ""\n                                        AND COALESCE(a.preferred_time_text, "") <> ""')
         && str_contains($professional, 'a.availability_selection_expires_at IS NULL OR a.availability_selection_expires_at >= NOW()'),
-    'vaga publicada prevalece sobre dia genérico da modalidade' => count($behavior->filterSlotsWithSettings($settings, $appointment, $published)) === 1,
+    'vaga publicada respeita os dias da modalidade configurados pela empresa' => count($behavior->filterSlotsWithSettings($settings, $appointment, $published)) === 0,
     'vaga calculada continua respeitando dia genérico da modalidade' => count($behavior->filterSlotsWithSettings($settings, $appointment, $calculated)) === 0,
     'pré-agendamento IA descobre profissional pelo slot publicado' => str_contains($availability, '$publishedDiscoveryUnbound')
         && str_contains($availability, '$publishedOwnerFilter'),

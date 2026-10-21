@@ -8,7 +8,7 @@ use App\Services\ConversationalSlotGridService;
 use App\Services\CalendarConversationService;
 
 $grid = new ConversationalSlotGridService();
-$date = '2026-10-20';
+$date = (new DateTimeImmutable('today', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days')->format('Y-m-d');
 $published = [
     ['id'=>11, 'starts_at'=>$date.' 08:00:00', 'ends_at'=>$date.' 08:50:00', 'status'=>'available', 'capacity_total'=>4, 'occupied_count'=>1, 'booked_count'=>1, 'held_count'=>0, 'modality'=>'presencial'],
     ['id'=>12, 'starts_at'=>$date.' 09:00:00', 'ends_at'=>$date.' 09:50:00', 'status'=>'booked', 'capacity_total'=>4, 'occupied_count'=>4, 'booked_count'=>4, 'held_count'=>0, 'modality'=>'presencial'],

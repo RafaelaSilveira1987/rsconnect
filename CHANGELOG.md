@@ -1,3 +1,11 @@
+## 21/10/2026 — QA Fase 1: triagem aberta, grade e auditoria de segurança
+
+- Corrigida classificação que reduzia a Demanda de uma pergunta aberta iniciada por 'Tem ...?' a um simples 'Sim'.
+- Resposta de idade aproximada pede esclarecimento exato sem repetir pergunta padrão.
+- Oito testes críticos/históricos passam novamente após correção do runtime e atualização de cenários temporais/contratos vigentes; dois testes novos de segurança e triagem adicionados.
+- Suíte crítica ampliada para 26 casos; regressão completa ainda apresenta 60 falhas a investigar. Sem migration nova.
+- Ver `docs/QA_FASE1_TRIAGEM_AGENDA_SEGURANCA_20261021.md`.
+
 ## 20/10/2026 — Bloqueio de lembretes de pré-agendamentos sem aprovação
 
 - Lembretes de WhatsApp, pedidos de presença e lembretes de notificações só são elegíveis após confirmação efetiva e aprovação, quando necessária.
