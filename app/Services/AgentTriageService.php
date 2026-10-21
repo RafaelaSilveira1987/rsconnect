@@ -252,6 +252,7 @@ final class AgentTriageService
         $profile = (new AgentConversationBehaviorService())->applyOperationalOverridesToProfile($profile);
         $fields = is_array($profile['triage_fields'] ?? null) ? $profile['triage_fields'] : [];
         $collected = is_array($state['collected'] ?? null) ? $state['collected'] : [];
+        $collected = $this->sanitizeWeakCollectedFreeTextValues($fields, $collected);
         $currentField = trim((string) ($state['current_field_key'] ?? '')) ?: null;
         $rows = [];
         foreach (array_values($messages) as $index => $message) {
@@ -798,7 +799,8 @@ final class AgentTriageService
         }
 
         if ($currentField === 'is_for_self') {
-            if (preg_match('/^(sim|sou eu|para mim|eu mesmo|eu mesma)\b/u', $latestNormalized)) {
+            if ($this->isExplicitSelfAttendanceAnswer($latestNormalized)
+                || preg_match('/^(sim|sou eu|para mim|eu mesmo|eu mesma)\b/u', $latestNormalized)) {
                 $collected['is_for_self'] = true;
             } elseif (preg_match('/^(nao|não|para (minha|meu)|minha|meu)\b/u', $latestNormalized)) {
                 $collected['is_for_self'] = false;
@@ -849,25 +851,40 @@ final class AgentTriageService
         if ($message === '') {
             return null;
         }
+        // Campos cadastrados como texto podem representar telefone ou respostas
+        // fechadas. A semântica vem da pergunta configurada, nunca da posição no fluxo.
+        // Sem essa validação, 'Gostaria de agendar' era salvo como telefone.
+        if ($this->isPhoneQuestionField($fieldKey, $fieldDefinition)) {
+            return $this->parseContactPhoneAnswer($message);
+        }
+
         // Respostas binárias devem seguir o TIPO/PERGUNTA da etapa atual.
         // Modelos históricos cadastraram perguntas sim/não como texto e o filtro
         // de respostas genéricas descartava "Sim"/"Não", repetindo a mesma etapa.
         // Não infere resposta de campos de texto abertos nem de outras etapas.
         if ($fieldKey !== 'is_for_self' && $this->isBinaryQuestionField($fieldDefinition)) {
+            // 'Sim, seria para mim' responde a QUEM será atendido, não a
+            // 'É a primeira consulta?'. Não movemos a resposta para outra etapa.
+            if ($this->isExplicitSelfAttendanceAnswer($normalized)
+                && !$this->isSelfAttendanceQuestionField($fieldKey, $fieldDefinition)) {
+                return null;
+            }
             $binary = $this->parseBinaryAnswer($normalized);
             if ($binary !== null) {
                 $type = strtolower(trim((string) ($fieldDefinition['field_type'] ?? 'text')));
                 return $type === 'boolean' ? $binary : ($binary ? 'Sim' : 'Não');
             }
-            // Campo binário não pode absorver texto livre incidental.
-            if (strtolower(trim((string) ($fieldDefinition['field_type'] ?? ''))) === 'boolean') {
-                return null;
-            }
+            // Também vale para perguntas legadas do tipo texto: nunca armazenar
+            // um cumprimento/frase inteira como resposta Sim/Não.
+            return null;
         }
         return match ($fieldKey) {
             'patient_age' => $this->extractAgeAnswer($message),
             'modality' => preg_match('/\bpresencial\b/u', $normalized) ? 'presencial' : (preg_match('/\bonline\b|\bmeet\b/u', $normalized) ? 'online' : null),
-            'is_for_self' => preg_match('/^(sim|sou eu|para mim|eu mesm[oa])\b/u', $normalized) ? true : (preg_match('/^(nao|não|minha|meu|para minha|para meu)\b/u', $normalized) ? false : null),
+            'is_for_self' => $this->isExplicitSelfAttendanceAnswer($normalized)
+                || preg_match('/^(sim|sou eu|para mim|eu mesm[oa])\b/u', $normalized)
+                ? true
+                : (preg_match('/^(nao|não|minha|meu|para minha|para meu)\b/u', $normalized) ? false : null),
             'requester_name' => $this->looksLikeSimpleName($message) ? mb_substr($message, 0, 150) : null,
             'patient_name' => $this->looksLikeSimpleName($message) ? mb_substr($message, 0, 150) : null,
             'service', 'professional', 'contact_source' => mb_strlen($message) <= 250 ? mb_substr($message, 0, 250) : null,
@@ -886,6 +903,52 @@ final class AgentTriageService
      * Perguntas históricas são reconhecidas pela forma interrogativa, não pelo nicho
      * nem pela chave do campo; perguntas abertas (como "Qual sua demanda?") ficam fora.
      */
+    /** Telefone é identificado pelo campo configurado, inclusive nos campos customizados. */
+    private function isPhoneQuestionField(string $fieldKey, ?array $field): bool
+    {
+        if (in_array($fieldKey, ['contact_phone', 'phone', 'telephone'], true)) {
+            return true;
+        }
+        if (!is_array($field)) {
+            return false;
+        }
+        $description = $this->normalize(trim((string) ($field['label'] ?? '')) . ' ' . trim((string) ($field['prompt_text'] ?? '')));
+        return preg_match('/\b(telefone|celular|whatsapp|numero (?:de )?(?:telefone|celular|contato))\b/u', $description) === 1;
+    }
+
+    /** Não aceitar mensagens livres, datas ou números curtos como telefone. */
+    private function parseContactPhoneAnswer(string $message): ?string
+    {
+        $normalized = $this->normalize($message);
+        // Aceita apresentação opcional, mas não frases contendo agendamento.
+        $body = preg_replace('/^(?:(?:meu|o meu) )?(?:telefone|celular|whatsapp|numero)(?: (?:de contato|e|eh))?\s*[:=-]?\s*/u', '', $normalized) ?? $normalized;
+        $body = trim($body);
+        if (!preg_match('/^\+?[0-9()\s.-]+$/u', $body)) {
+            return null;
+        }
+        $digits = preg_replace('/\D+/', '', $body) ?: '';
+        return strlen($digits) >= 10 && strlen($digits) <= 13 ? $digits : null;
+    }
+
+    /** Não confundir resposta 'seria para mim' com 'primeira consulta'. */
+    private function isExplicitSelfAttendanceAnswer(string $normalized): bool
+    {
+        return preg_match('/\b(?:seria|e|eh|sera|vai ser|atendimento e|atendimento seria)\s+(?:para|pra)\s+mim\b/u', $normalized) === 1
+            || preg_match('/\b(?:sim[, ]+)?(?:e|eh|sera|seria)\s+(?:para|pra)\s+(?:mim|mim mesm[oa])\b/u', $normalized) === 1;
+    }
+
+    private function isSelfAttendanceQuestionField(string $key, ?array $field): bool
+    {
+        if ($key === 'is_for_self') {
+            return true;
+        }
+        if (!is_array($field)) {
+            return false;
+        }
+        $description = $this->normalize(trim((string) ($field['label'] ?? '')) . ' ' . trim((string) ($field['prompt_text'] ?? '')));
+        return preg_match('/\b(para voce|para quem|para si|proprio paciente)\b/u', $description) === 1;
+    }
+
     private function isBinaryQuestionField(?array $field): bool
     {
         if (!is_array($field)) {
@@ -1152,6 +1215,20 @@ final class AgentTriageService
     }
 
     /**
+     * Apresentação de dados já existentes, sem atualizar o banco. Nunca reutiliza
+     * textos incompatíveis como se fossem respostas validadas no pré-agendamento.
+     * @return array{collected:array<string,mixed>,invalid_keys:list<string>}
+     */
+    public function reviewCollectedValues(array $fields, array $collected): array
+    {
+        $reviewed = $this->sanitizeWeakCollectedFreeTextValues($fields, $collected);
+        return [
+            'collected' => $reviewed,
+            'invalid_keys' => array_values(array_map('strval', array_keys(array_diff_key($collected, $reviewed)))),
+        ];
+    }
+
+    /**
      * Remove somente valores textuais fracos que foram persistidos como se fossem uma
      * resposta estruturada. Isso corrige sessões já iniciadas sem apagar respostas
      * substanciais nem dados determinísticos. Um valor explícito e descritivo permanece.
@@ -1175,7 +1252,9 @@ final class AgentTriageService
             if (!in_array($fieldType, ['text', 'textarea'], true)) {
                 continue;
             }
-            if ($fieldKey !== 'brief_demand' && !str_starts_with($fieldKey, 'custom_')) {
+            if ($fieldKey !== 'brief_demand' && !str_starts_with($fieldKey, 'custom_')
+                && !$this->isPhoneQuestionField($fieldKey, $field)
+                && !$this->isBinaryQuestionField($field)) {
                 continue;
             }
 
@@ -1184,6 +1263,28 @@ final class AgentTriageService
                 continue;
             }
             $normalizedValue = $this->normalize($value);
+            // Revalidar sessões antigas evita que textos indevidos dispensem a
+            // pergunta correta após retomada fora do expediente.
+            if ($this->isPhoneQuestionField($fieldKey, $field)) {
+                $phone = $this->parseContactPhoneAnswer($value);
+                if ($phone === null) {
+                    unset($collected[$fieldKey]);
+                } else {
+                    $collected[$fieldKey] = $phone;
+                }
+                continue;
+            }
+            if ($this->isBinaryQuestionField($field)) {
+                $binary = $this->isExplicitSelfAttendanceAnswer($normalizedValue)
+                    && !$this->isSelfAttendanceQuestionField($fieldKey, $field)
+                    ? null : $this->parseBinaryAnswer($normalizedValue);
+                if ($binary === null) {
+                    unset($collected[$fieldKey]);
+                } else {
+                    $collected[$fieldKey] = $binary ? 'Sim' : 'Não';
+                }
+                continue;
+            }
             $invalidConfiguredDemand = $this->isConfiguredDemandField($fieldKey, $field)
                 && !$this->looksLikeDemandAnswer($value, $normalizedValue);
             if ($this->looksLikeLowInformationContinuation($normalizedValue)

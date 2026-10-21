@@ -79,7 +79,7 @@ $appointmentContextRows = static function (array $appointment) use (
     $demandStatusLabels,
     $preScheduleSourceLabels
 ): array {
-    $triageData = $triageCollected($appointment['current_triage_collected_json'] ?? null);
+    $triageData = $triageCollected($appointment['triage_review_collected_json'] ?? $appointment['current_triage_collected_json'] ?? null);
     $contactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
     $demandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
     if ($demandSummary === '') {
@@ -447,7 +447,7 @@ $calendarEvents = array_map(static function (array $appointment) use (
                 $showStructuredContext = $isPreSchedule || $hasPreScheduleContext($appointment);
                 $hasPreSchedulePreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== '' && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
                 $currentContactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
-                $triageData = $triageCollected($appointment['current_triage_collected_json'] ?? null);
+                $triageData = $triageCollected($appointment['triage_review_collected_json'] ?? $appointment['current_triage_collected_json'] ?? null);
                 $currentDemandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
                 if ($currentDemandSummary === '') {
                     $currentDemandSummary = trim((string) ($triageData['brief_demand'] ?? ''));
@@ -505,7 +505,7 @@ $calendarEvents = array_map(static function (array $appointment) use (
                                     <span class="eyebrow"><?= $isPreSchedule ? 'Pré-agendamento' : 'Atendimento confirmado' ?></span>
                                     <strong><?= $isPreSchedule ? 'Informações registradas' : 'Informações trazidas do pré-agendamento' ?></strong>
                                 </div>
-                                <small>Dados estruturados da conversa e da agenda.</small>
+                                <small>Informações atuais da conversa (podem ter mudado desde o agendamento).</small>
                             </div>
                             <dl class="pre-schedule-record-list">
                                 <div><dt>Origem</dt><dd><?= View::e($sourceLabel) ?></dd></div>
@@ -515,6 +515,9 @@ $calendarEvents = array_map(static function (array $appointment) use (
                                 <div><dt>Horário/período informado</dt><dd><?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'Não informado') ?></dd></div>
                                 <div><dt>Contato</dt><dd><?= View::e(trim((string) ($appointment['contact_name'] ?? '')) ?: 'Não identificado') ?></dd></div>
                                 <div><dt>Responsável</dt><dd><?= View::e(trim((string) ($appointment['owner_name'] ?? '')) ?: 'Não definido') ?></dd></div>
+                                <?php foreach ((array) ($appointment['triage_review_invalid_keys'] ?? []) as $invalidKey): ?>
+                                    <div class="pre-schedule-record-wide"><dt><?= View::e($triageFieldLabels[(string) $invalidKey] ?? (string) $invalidKey) ?></dt><dd>Resposta incompatível com este campo — conferir com a equipe</dd></div>
+                                <?php endforeach; ?>
                                 <?php foreach ($dynamicTriageRows as $triageRow): ?>
                                     <div class="pre-schedule-record-wide"><dt><?= View::e($triageRow['label']) ?></dt><dd><?= View::e($triageRow['value']) ?></dd></div>
                                 <?php endforeach; ?>

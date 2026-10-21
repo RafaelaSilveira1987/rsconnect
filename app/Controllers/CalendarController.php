@@ -12,6 +12,7 @@ use App\Core\Env;
 use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
+use App\Services\AgentTriageService;
 use App\Services\AutomationWebhookService;
 use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarClientCommunicationService;
@@ -99,6 +100,7 @@ final class CalendarController
         $conversations = [];
         $team = [];
         $triageFieldLabels = [];
+        $triageFieldDefinitions = [];
         $metrics = ['today_count' => 0, 'upcoming_count' => 0, 'pending_sync' => 0, 'completed_count' => 0];
 
         if ($tenantId > 0) {
@@ -205,7 +207,7 @@ final class CalendarController
             // apresentar qualquer informação coletada pela Ordem do atendimento.
             try {
                 $triageFieldStatement = $pdo->prepare(
-                    'SELECT field_key, label FROM tenant_triage_fields WHERE tenant_id = :tenant_id ORDER BY position, id'
+                    'SELECT field_key, label, field_type, prompt_text, active FROM tenant_triage_fields WHERE tenant_id = :tenant_id ORDER BY position, id'
                 );
                 $triageFieldStatement->execute(['tenant_id' => $tenantId]);
                 foreach ($triageFieldStatement->fetchAll(PDO::FETCH_ASSOC) as $triageField) {
@@ -215,9 +217,26 @@ final class CalendarController
                     }
                     $label = trim((string) ($triageField['label'] ?? ''));
                     $triageFieldLabels[$fieldKey] = $label !== '' ? $label : $fieldKey;
+                    $triageFieldDefinitions[] = $triageField;
                 }
             } catch (Throwable) {
                 $triageFieldLabels = [];
+                $triageFieldDefinitions = [];
+            }
+
+            // Exibição conservadora: o registro histórico não deve apresentar
+            // saudação como telefone nem resposta de outra etapa como primeira consulta.
+            // A triagem atual continua armazenada, sem alterações silenciosas no banco.
+            if ($appointments !== [] && $triageFieldDefinitions !== []) {
+                $reviewService = new AgentTriageService();
+                foreach ($appointments as &$calendarAppointment) {
+                    $stored = json_decode((string) ($calendarAppointment['current_triage_collected_json'] ?? '{}'), true);
+                    $stored = is_array($stored) ? $stored : [];
+                    $review = $reviewService->reviewCollectedValues($triageFieldDefinitions, $stored);
+                    $calendarAppointment['triage_review_collected_json'] = json_encode($review['collected'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $calendarAppointment['triage_review_invalid_keys'] = $review['invalid_keys'];
+                }
+                unset($calendarAppointment);
             }
 
             $metricStatement = $pdo->prepare(
