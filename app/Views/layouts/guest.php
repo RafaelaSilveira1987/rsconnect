@@ -28,10 +28,11 @@ $brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSeco
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= View::e($title ?? 'Entrar') ?> — <?= View::e($brandName) ?></title>
-    <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
+    <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php elseif (empty($branding['enabled'])): ?><link rel="icon" type="image/png" href="<?= View::e(Router::url('/assets/img/rs-connect-next-favicon.png')) ?>"><?php endif; ?>
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.39.2')) ?>">
+    <?php if (empty($branding['enabled'])): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next.css?v=20261022-1')) ?>"><?php endif; ?>
 </head>
-<body class="guest-page<?= !empty($branding['enabled']) ? ' has-tenant-branding' : '' ?>" style="<?= View::e($brandCssVariables) ?>">
+<body class="guest-page<?= !empty($branding['enabled']) ? ' has-tenant-branding' : ' rs-next-login' ?>" style="<?= View::e($brandCssVariables) ?>">
     <main class="guest-shell">
         <?php if ($flashes): ?>
             <section class="flash-stack" aria-live="polite">

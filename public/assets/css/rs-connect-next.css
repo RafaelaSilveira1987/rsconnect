@@ -1,0 +1,459 @@
+/*
+ * RS Connect Next — primeira etapa visual — 2026-10-22
+ * Escopo: identidade padrão da plataforma, login, dashboard e conversas.
+ * Camada visual isolada: não modifica eventos, APIs, formulários nem permissões.
+ * As marcas personalizadas de empresas não carregam este arquivo.
+ */
+
+/* ====================================================
+   Identidade visual e navegação do produto
+   ==================================================== */
+body.rs-next-theme,
+body.rs-next-login {
+  --rs-next-primary: #6246ea;
+  --rs-next-primary-hover: #5135d1;
+  --rs-next-blue: #2563eb;
+  --rs-next-cyan: #06b6d4;
+  --rs-next-ink: #18213b;
+  --rs-next-muted: #66748e;
+  --rs-next-line: #e3e8f3;
+  --rs-next-bg: #f4f6fc;
+  --rs-next-surface: #fff;
+  --rs-next-shadow: 0 10px 32px rgba(24, 33, 70, .055);
+  --rs-blue: var(--rs-next-blue);
+  --rs-purple: var(--rs-next-primary);
+  --rs-teal: var(--rs-next-primary);
+  --rs-cyan: var(--rs-next-cyan);
+  --rs-border: var(--rs-next-line);
+  --rs-ink: var(--rs-next-ink);
+  --rs-form-focus: var(--rs-next-primary);
+  --rs-form-focus-ring: rgba(98,70,234,.15);
+  color: var(--rs-next-ink);
+}
+
+body.rs-next-theme {
+  background: var(--rs-next-bg) !important;
+}
+body.rs-next-theme::before { opacity: .12; pointer-events: none; }
+body.rs-next-theme .main-content { background: #f4f6fc !important; }
+body.rs-next-theme .page-content { padding-bottom: 32px; }
+
+/* Escopo alto para vencer overrides legados sem remover suas regras. */
+body.rs-next-theme .sidebar {
+  background: linear-gradient(178deg,#171e39 0%,#121932 62%,#202249 100%) !important;
+  border-right: 1px solid rgba(165, 174, 223, .17) !important;
+  box-shadow: 10px 0 36px rgba(15,23,56,.14) !important;
+  color: #e4e9fb !important;
+}
+body.rs-next-theme .sidebar .brand,
+body.rs-next-theme .sidebar .brand strong,
+body.rs-next-theme .sidebar .brand > span:last-child,
+body.rs-next-theme .sidebar .sidebar-footer strong,
+body.rs-next-theme .sidebar .user-mini strong {
+  color: #f9faff !important;
+}
+body.rs-next-theme .sidebar .brand small,
+body.rs-next-theme .sidebar .sidebar-footer small,
+body.rs-next-theme .sidebar .user-mini small { color: #a4b2d1 !important; }
+body.rs-next-theme .sidebar .brand {
+  padding-block: 17px !important;
+  border-bottom-color: rgba(255,255,255,.09) !important;
+  text-decoration: none;
+}
+body.rs-next-theme .sidebar .brand-mark.rs-next-brand-mark {
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 52px !important;
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+  padding: 5px !important;
+  background: #24244e !important;
+  border: 1px solid rgba(147,139,250,.32) !important;
+  border-radius: 15px !important;
+  box-shadow: 0 8px 20px rgba(4,7,22,.18) !important;
+  overflow: hidden;
+}
+body.rs-next-theme .rs-next-brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+body.rs-next-theme .sidebar .nav-caption,
+body.rs-next-theme .sidebar .menu-section-title,
+body.rs-next-theme .sidebar .nav-section-title {
+  color: #8495bd !important;
+  font-size: .65rem;
+  letter-spacing: .11em;
+  font-weight: 800;
+}
+body.rs-next-theme .sidebar .nav-link,
+body.rs-next-theme .sidebar-nav .nav-link,
+body.rs-next-theme .sidebar nav a {
+  color: #c4cde3 !important;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+body.rs-next-theme .sidebar .nav-link .nav-icon,
+body.rs-next-theme .sidebar nav a .nav-icon,
+body.rs-next-theme .sidebar nav a svg { color: #9eadd0 !important; }
+body.rs-next-theme .sidebar .nav-link:hover,
+body.rs-next-theme .sidebar nav a:hover {
+  color: #fff !important;
+  background: rgba(158,145,245,.12) !important;
+  border-color: rgba(178,160,255,.14) !important;
+}
+body.rs-next-theme .sidebar .nav-link:hover .nav-icon { color: #d8d0ff !important; }
+body.rs-next-theme .sidebar .nav-link.is-active,
+body.rs-next-theme .sidebar .nav-link.active,
+body.rs-next-theme .sidebar nav a.is-active {
+  color: #fff !important;
+  background: linear-gradient(110deg,rgba(106,81,236,.32),rgba(78,71,161,.24)) !important;
+  border: 1px solid rgba(158,142,245,.35) !important;
+  box-shadow: inset 3px 0 0 #aa9cff, 0 5px 14px rgba(3,4,16,.10) !important;
+  font-weight: 750;
+}
+body.rs-next-theme .sidebar .nav-link.is-active .nav-icon,
+body.rs-next-theme .sidebar .nav-link.active .nav-icon,
+body.rs-next-theme .sidebar nav a.is-active svg { color: #ded5ff !important; }
+body.rs-next-theme .sidebar .sidebar-footer { border-top-color: rgba(255,255,255,.10) !important; }
+body.rs-next-theme .sidebar .tenant-pill,
+body.rs-next-theme .sidebar .user-card,
+body.rs-next-theme .sidebar .sidebar-user,
+body.rs-next-theme .sidebar .logout-box {
+  color: #e6ebf8 !important;
+  background: rgba(255,255,255,.055) !important;
+  border-color: rgba(255,255,255,.12) !important;
+}
+body.rs-next-theme .sidebar .logout-button,
+body.rs-next-theme .sidebar a.logout-button,
+body.rs-next-theme .sidebar button {
+  color: #d8e0f4 !important;
+  border-color: rgba(255,255,255,.14) !important;
+  background: rgba(255,255,255,.06) !important;
+}
+body.rs-next-theme .sidebar .logout-button:hover,
+body.rs-next-theme .sidebar button:hover { color: #fff !important; background: rgba(152,132,255,.20) !important; }
+body.rs-next-theme .sidebar .nav-badge { color: #fff !important; background: #dd4665 !important; }
+
+body.rs-next-theme .topbar.topbar-v36181 {
+  background: rgba(255,255,255,.96) !important;
+  border-bottom: 1px solid var(--rs-next-line) !important;
+  box-shadow: 0 6px 18px rgba(24,33,70,.035) !important;
+}
+body.rs-next-theme .topbar-title-block h1 { color: var(--rs-next-ink); letter-spacing: -.035em; }
+body.rs-next-theme .topbar-title-block .eyebrow { color: #7568bc !important; letter-spacing: .07em; }
+body.rs-next-theme .topbar-module-search {
+  background: #f6f7fc;
+  border-color: #e0e5f2;
+  border-radius: 13px;
+}
+body.rs-next-theme .topbar-module-search:focus-within {
+  background: #fff;
+  border-color: #9f8fff;
+  box-shadow: 0 0 0 4px rgba(98,70,234,.10);
+}
+body.rs-next-theme .topbar-home,
+body.rs-next-theme .topbar-action-button,
+body.rs-next-theme .topbar-actions .topbar-notification {
+  color: #615b87;
+  background: #f8f8fd;
+  border-color: #e4e5f1;
+  box-shadow: none;
+}
+body.rs-next-theme .topbar-profile { border-color: #e4e5f1; border-radius: 13px; box-shadow: none; }
+body.rs-next-theme .topbar-profile-avatar {
+  background: linear-gradient(130deg,#6246ea,#356de7);
+  box-shadow: 0 4px 12px rgba(98,70,234,.16);
+}
+
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content :where(.card,.metric-card,.panel-card) {
+  background: #fff !important;
+  border: 1px solid var(--rs-next-line) !important;
+  box-shadow: var(--rs-next-shadow) !important;
+  border-radius: 18px !important;
+  backdrop-filter: none;
+}
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content :where(.card,.metric-card,.panel-card):hover {
+  box-shadow: 0 13px 33px rgba(24,33,70,.065) !important;
+}
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content .eyebrow { color: #6751d0 !important; letter-spacing: .10em; }
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content :where(.btn-primary,.btn-secondary) {
+  background: var(--rs-next-primary) !important;
+  border: 1px solid var(--rs-next-primary) !important;
+  border-radius: 12px !important;
+  color: #fff !important;
+  box-shadow: 0 5px 15px rgba(98,70,234,.16) !important;
+}
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content :where(.btn-primary,.btn-secondary):hover {
+  background: var(--rs-next-primary-hover) !important;
+  border-color: var(--rs-next-primary-hover) !important;
+  box-shadow: 0 8px 20px rgba(98,70,234,.20) !important;
+}
+body.rs-next-theme :is(.rs-next-dashboard,.rs-next-conversations) .page-content :where(.btn-outline,.btn-quiet,.btn-ghost) {
+  border-color: #dfe4f1 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: #47536d !important;
+  box-shadow: none !important;
+}
+body.rs-next-theme :where(a,button,input,select,textarea,[tabindex]):focus-visible {
+  outline: 3px solid rgba(98,70,234,.50);
+  outline-offset: 3px;
+}
+
+/* ====================================================
+   Dashboard cliente e visão executiva RS
+   ==================================================== */
+body.rs-next-theme .client-dashboard-header,
+body.rs-next-theme .admin-executive-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(22px,2.5vw,34px) !important;
+  border: 1px solid rgba(133,112,234,.18) !important;
+  border-radius: 22px !important;
+  background: linear-gradient(109deg,#ffffff 3%,#faf9ff 50%,#f0f5ff 100%) !important;
+  box-shadow: 0 12px 30px rgba(58,46,130,.045) !important;
+  margin-bottom: 19px;
+}
+body.rs-next-theme .client-dashboard-header::after,
+body.rs-next-theme .admin-executive-hero::after {
+  content:"";
+  position:absolute;
+  right:-74px;
+  bottom:-148px;
+  width:300px;
+  height:300px;
+  border:1px solid rgba(98,70,234,.10);
+  border-radius:50%;
+  box-shadow:0 0 0 31px rgba(98,70,234,.025),0 0 0 65px rgba(37,99,235,.022);
+  pointer-events:none;
+}
+body.rs-next-theme .client-dashboard-header > *,
+body.rs-next-theme .admin-executive-hero > * { position: relative; z-index: 1; }
+body.rs-next-theme .client-dashboard-header h2,
+body.rs-next-theme .admin-executive-hero h2 { color: #1a2340 !important; letter-spacing: -.045em; }
+body.rs-next-theme .client-dashboard-header p,
+body.rs-next-theme .admin-executive-hero p { color: #6c7691 !important; }
+body.rs-next-theme .client-dashboard-kpis { gap: 14px; }
+body.rs-next-theme .client-dashboard-kpi,
+body.rs-next-theme .admin-kpi-card {
+  position:relative;
+  overflow:hidden;
+  min-width:0;
+  border: 1px solid #e4e9f4 !important;
+  background: #fff !important;
+  border-radius: 18px !important;
+  box-shadow: 0 8px 24px rgba(28,38,79,.045) !important;
+  transition: transform .17s ease, box-shadow .17s ease, border-color .17s ease;
+}
+body.rs-next-theme .client-dashboard-kpi::before {
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:4px;
+  background:#dfdcf9;
+}
+body.rs-next-theme .client-dashboard-kpi.is-primary {
+  background: linear-gradient(135deg,#f1eeff,#fff 73%) !important;
+  border-color:#cfc6fd !important;
+}
+body.rs-next-theme .client-dashboard-kpi.is-primary::before { background:#6246ea; }
+body.rs-next-theme .client-dashboard-kpi.has-attention::before { background:#f0a441; }
+body.rs-next-theme .client-dashboard-kpi:hover,
+body.rs-next-theme .admin-kpi-card:hover {
+  transform:translateY(-2px);
+  border-color:#cbbefa !important;
+  box-shadow: 0 16px 30px rgba(50,44,121,.09) !important;
+}
+body.rs-next-theme .client-dashboard-kpi span { color: #69718b; font-size:.73rem; letter-spacing:.045em; }
+body.rs-next-theme .client-dashboard-kpi strong { color:#242449; font-size: clamp(1.9rem,2.5vw,2.55rem); }
+body.rs-next-theme .client-dashboard-kpi small { color: #75819a; }
+body.rs-next-theme .admin-kpi-card strong { color:#222c48; }
+body.rs-next-theme .client-action-item,
+body.rs-next-theme .client-shortcut-grid a,
+body.rs-next-theme .admin-quick-action {
+  border-color: #e4e9f3 !important;
+  background: #fafbfe !important;
+  border-radius: 13px !important;
+  box-shadow: none !important;
+}
+body.rs-next-theme .client-action-item:hover,
+body.rs-next-theme .client-shortcut-grid a:hover,
+body.rs-next-theme .admin-quick-action:hover {
+  background: #f5f2ff !important;
+  border-color: #d9ceff !important;
+}
+body.rs-next-theme .client-dashboard-welcome {
+  background: linear-gradient(115deg,#f3efff,#f8fbff) !important;
+  border-color:#ded6fd !important;
+}
+
+/* ====================================================
+   Conversas: foco no atendimento, não no enfeite
+   ==================================================== */
+body.rs-next-theme .conversation-workspace { gap: 14px; }
+body.rs-next-theme .conversation-workspace > :where(.conversation-inbox,.conversation-chat) {
+  border: 1px solid #e3e7f3 !important;
+  border-radius: 18px !important;
+  background: #fff !important;
+  box-shadow: 0 8px 28px rgba(31,36,76,.055) !important;
+  overflow: hidden;
+}
+body.rs-next-theme .conversation-panel-heading {
+  background: #fff;
+  border-bottom-color: #e8eaf4;
+}
+body.rs-next-theme .conversation-panel-heading h2 { color:#222c48; letter-spacing:-.04em; }
+body.rs-next-theme .conversation-heading-actions .badge {
+  background: #f0edff !important;
+  color: #5c48bb !important;
+  border:1px solid #e5ddff;
+}
+body.rs-next-theme .conversation-list { background: #fff; }
+body.rs-next-theme .conversation-list-row { border-color:#edf0f7; }
+body.rs-next-theme .conversation-list-row .conversation-list-item {
+  border-bottom: 1px solid #edf0f7;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+body.rs-next-theme .conversation-list-row .conversation-list-item:hover { background: #f7f6ff !important; }
+body.rs-next-theme .conversation-list-row .conversation-list-item.is-selected {
+  background: #f1eeff !important;
+  box-shadow: inset 3px 0 0 #7056e7 !important;
+}
+/* Eventos operacionais continuam com as cores semânticas originais. */
+body.rs-next-theme .conversation-list-row.has-unread .conversation-list-item:not(.is-selected) { background:#f8faff; }
+body.rs-next-theme .conversation-chat .chat-header {
+  background:#fff;
+  border-bottom-color:#e9edf5;
+}
+body.rs-next-theme .chat-header :where(h2,h3,strong) { color:#1d2a46; }
+body.rs-next-theme .conversation-chat .chat-thread {
+  background-color:#f6f7fd !important;
+  background-image: radial-gradient(circle at 16% 20%,rgba(106,89,213,.055),transparent 28%),radial-gradient(circle at 92% 84%,rgba(37,99,235,.04),transparent 35%) !important;
+}
+body.rs-next-theme .chat-thread .message-row.is-outgoing .message-bubble:not(.has-error) {
+  background: #e9e6ff !important;
+  border-color: #d8d1ff !important;
+  color: #212442 !important;
+}
+body.rs-next-theme .chat-thread .message-row.is-incoming .message-bubble:not(.has-error) {
+  background: #fff !important;
+  border-color: #e5e8f2 !important;
+  color: #28314a !important;
+}
+body.rs-next-theme .chat-composer {
+  background: #fff !important;
+  border-top: 1px solid #e9edf5 !important;
+}
+body.rs-next-theme .chat-composer textarea {
+  border:1px solid #dbe1f1 !important;
+  border-radius: 13px !important;
+  background:#fbfcff !important;
+  color:#26314b !important;
+}
+body.rs-next-theme .chat-composer textarea:focus {
+  border-color:#9685f0 !important;
+  box-shadow:0 0 0 4px rgba(98,70,234,.11) !important;
+}
+body.rs-next-theme .conversation-drawer :where(.drawer-section,.conversation-overview-panel) {
+  border-color:#e6e9f4;
+}
+body.rs-next-theme .conversation-chat :where(.mini-badge,.badge) { font-weight:700; }
+body.rs-next-theme .conversation-chat .chat-empty { color:#687791; }
+
+/* ====================================================
+   Login: produto RS Connect, autoria discreta RS Digital Lab
+   ==================================================== */
+body.rs-next-login .login-grid-clean {
+  background: radial-gradient(circle at 18% 18%,rgba(86,89,218,.055),transparent 36%),#f6f8fd !important;
+}
+body.rs-next-login .login-showcase {
+  color:#f7f8ff;
+  background:
+    radial-gradient(circle at 77% 10%,rgba(112,85,243,.33),transparent 35%),
+    radial-gradient(circle at 13% 85%,rgba(30,120,229,.18),transparent 35%),
+    linear-gradient(145deg,#141d39 4%,#1b2143 60%,#27245c 100%) !important;
+}
+body.rs-next-login .login-brand-copy strong,
+body.rs-next-login .login-showcase h1,
+body.rs-next-login .login-benefit strong { color:#f8f9ff !important; }
+body.rs-next-login .login-brand-copy strong { letter-spacing:.13em; }
+body.rs-next-login .login-kicker { color:#b3a5ff !important; }
+body.rs-next-login .login-showcase h1 {
+  font-weight:790;
+  font-size:clamp(2.3rem,3.4vw,4.25rem);
+  letter-spacing:-.05em;
+  max-width:690px;
+}
+body.rs-next-login .login-custom-subtitle { color:#c9cee6; }
+body.rs-next-login .login-benefit {
+  background:rgba(255,255,255,.055) !important;
+  border-color:rgba(191,190,239,.16) !important;
+  box-shadow:none !important;
+  backdrop-filter:none;
+}
+body.rs-next-login .login-benefit small { color:#bac5e2 !important; }
+body.rs-next-login .login-benefit-icon,
+body.rs-next-login .login-benefit-icon.is-purple,
+body.rs-next-login .login-benefit-icon.is-indigo {
+  color:#c6bfff;
+  background:rgba(127,110,230,.12);
+  border-color:rgba(162,148,253,.23);
+  box-shadow:none;
+}
+body.rs-next-login .login-creator { color:#aeb8d4 !important; }
+body.rs-next-login .login-creator strong { color:#fff; }
+body.rs-next-login .login-panel-clean { background:#f6f8fd !important; }
+body.rs-next-login .login-card-clean {
+  background:#fff !important;
+  border-color:#e3e7f2 !important;
+  border-radius:24px !important;
+  box-shadow:0 28px 75px rgba(23,28,76,.11) !important;
+}
+body.rs-next-login .login-card-header h2 { color:#1c2545; }
+body.rs-next-login .login-card-header p { color:#6f7a92; }
+body.rs-next-login .login-card-brand strong { color:#24264c !important; }
+body.rs-next-login .login-submit {
+  background:var(--rs-next-primary) !important;
+  border-color:var(--rs-next-primary) !important;
+  color:#fff !important;
+  border-radius:12px !important;
+  box-shadow:0 10px 24px rgba(98,70,234,.18) !important;
+}
+body.rs-next-login .login-submit:hover { background:var(--rs-next-primary-hover) !important; }
+body.rs-next-login .login-input-wrap input:focus {
+  border-color:#9685f0 !important;
+  box-shadow:0 0 0 4px rgba(98,70,234,.12) !important;
+}
+body.rs-next-login :where(button,input,a):focus-visible { outline:3px solid #9383f4; outline-offset:3px; }
+
+/* ====================================================
+   Responsividade e acessibilidade
+   ==================================================== */
+@media (max-width: 1200px) {
+  body.rs-next-theme .client-dashboard-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 820px) {
+  body.rs-next-theme .sidebar { box-shadow:20px 0 50px rgba(14,18,49,.25) !important; }
+  body.rs-next-theme .client-dashboard-header,
+  body.rs-next-theme .admin-executive-hero { padding:22px !important; }
+  body.rs-next-theme .client-dashboard-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body.rs-next-theme .conversation-workspace { gap:10px; }
+}
+@media (max-width: 620px) {
+  body.rs-next-theme .client-dashboard-kpis { grid-template-columns:1fr; }
+  body.rs-next-theme .client-dashboard-kpi { min-height:112px; padding:16px 18px; }
+  body.rs-next-theme .client-dashboard-header-actions { width:100%; }
+  body.rs-next-theme .client-dashboard-header-actions .btn { flex:1 1 auto; text-align:center; }
+  body.rs-next-theme .conversation-inbox,
+  body.rs-next-theme .conversation-chat { border-radius:12px !important; }
+  body.rs-next-theme .conversation-panel-heading { padding:15px !important; }
+  body.rs-next-theme .chat-thread { padding:13px !important; }
+  body.rs-next-login .login-showcase { padding:36px 24px 28px !important; }
+  body.rs-next-login .login-card-clean { padding:25px !important; border-radius:18px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.rs-next-theme *, body.rs-next-login * { scroll-behavior:auto !important; }
+  body.rs-next-theme .client-dashboard-kpi,
+  body.rs-next-theme .admin-kpi-card { transition:none; }
+}

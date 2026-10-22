@@ -119,6 +119,7 @@ if (Auth::check() && !Auth::isSuperAdmin() && Auth::tenantId()) {
 $pageHelp = (new PageHelpService())->forPath($_SERVER['REQUEST_URI'] ?? '/', Auth::isSuperAdmin());
 // Escopo explícito da harmonização visual: não modifica telas de infraestrutura.
 $businessDesign = preg_match('~/(?:onboarding|agents|agent-blueprints|conversations|queue|contacts|crm|calendar|tasks|reports)(?:/|$)~', $currentPath) === 1;
+$rsNextPageClass = $isActive('/') !== '' || $isActive('/dashboard') !== '' ? ' rs-next-dashboard' : ($isActive('/conversations') !== '' ? ' rs-next-conversations' : '');
 
 $conversationUnread = 0;
 if (Auth::check() && Auth::can('conversations.view')) {
@@ -185,7 +186,7 @@ $svgIcon = static function (string $name): string {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="<?= View::e($brandPrimary) ?>">
     <title><?= View::e($title ?? $brandName) ?> — <?= View::e($brandName) ?></title>
-    <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php endif; ?>
+    <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php elseif (!$brandEnabled): ?><link rel="icon" type="image/png" href="<?= View::e(Router::url('/assets/img/rs-connect-next-favicon.png')) ?>"><?php endif; ?>
     <!-- Marcador histórico de regressão: app.css?v=36.20.2 -->
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
@@ -196,6 +197,7 @@ $svgIcon = static function (string $name): string {
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-ui-harmony.css?v=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets) || !empty($activationAssets) || !empty($blueprintAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-activation-unified.css?v=20261014b')) ?>"><?php endif; ?>
     <?php if ($businessDesign): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-business-unified.css?v=20261015a')) ?>"><?php endif; ?>
+    <?php if (!$brandEnabled): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next.css?v=20261022-1')) ?>"><?php endif; ?>
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;
@@ -217,7 +219,7 @@ $svgIcon = static function (string $name): string {
         }
     </style>
 </head>
-<body<?= $tenantIdentity ? ' class="has-tenant-branding" style="' . View::e($brandCssVariables) . '"' : '' ?>>
+<body<?= $tenantIdentity ? ' class="has-tenant-branding' . (!$brandEnabled ? ' rs-next-theme' : '') . '" style="' . View::e($brandCssVariables) . '"' : ' class="rs-next-theme"' ?>>
 <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 <div class="sr-only" aria-live="polite" aria-atomic="true" data-app-live-region></div>
 <div class="app-shell">
@@ -228,7 +230,9 @@ $svgIcon = static function (string $name): string {
                     <img src="<?= View::e($brandAssetHref($brandLogoUrl)) ?>" alt="Logo de <?= View::e($brandName) ?>" style="<?= View::e($brandLogoImageStyle) ?>">
                 </span>
             <?php else: ?>
-                <span class="brand-mark"><?= View::e($brandIconText) ?></span>
+                <?php if (!$tenantIdentity): ?>
+                <span class="brand-mark rs-next-brand-mark"><img src="<?= View::e(Router::url('/assets/img/rs-connect-mark.png')) ?>" alt="" loading="eager"></span>
+                <?php else: ?><span class="brand-mark"><?= View::e($brandIconText) ?></span><?php endif; ?>
             <?php endif; ?>
             <span><strong><?= View::e($brandName) ?></strong><small><?= View::e($brandSubtitle) ?></small></span>
         </a>
@@ -365,7 +369,7 @@ $svgIcon = static function (string $name): string {
     </aside>
     <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Fechar menu"></button>
 
-    <main class="main-content<?= $businessDesign ? ' rs-business-unified' : '' ?>" id="main-content" tabindex="-1">
+    <main class="main-content<?= $businessDesign ? ' rs-business-unified' : '' ?><?= $brandEnabled ? '' : $rsNextPageClass ?>" id="main-content" tabindex="-1">
         <header class="topbar topbar-v36181">
             <a class="topbar-home" href="<?= View::e(Router::url('/')) ?>" aria-label="Ir para o início"><?= $svgIcon('dashboard') ?></a>
             <div class="topbar-title-block">

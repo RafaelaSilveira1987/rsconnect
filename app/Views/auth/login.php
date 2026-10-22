@@ -14,8 +14,8 @@ $brandIconUrl = (string) ($branding['icon_url'] ?? '');
 $brandAssetHref = static fn (string $url): string => preg_match('~^https://~i', $url) === 1 ? $url : Router::url($url);
 $brandMainImage = $brandLogoUrl !== '' ? $brandAssetHref($brandLogoUrl) : Router::url('/assets/img/rs-connect-mark.png');
 $brandCompactImage = ($brandIconUrl ?: $brandLogoUrl) !== '' ? $brandAssetHref($brandIconUrl ?: $brandLogoUrl) : Router::url('/assets/img/rs-connect-mark.png');
-$loginEyebrow = $brandEnabled ? (string) ($branding['login_eyebrow'] ?? $brandSubtitle) : 'Plataforma de atendimento inteligente';
-$loginTitle = $brandEnabled ? (string) ($branding['login_title'] ?? ('Acesse o painel da ' . $brandName)) : 'Atendimento, CRM e automação em um só lugar.';
+$loginEyebrow = $brandEnabled ? (string) ($branding['login_eyebrow'] ?? $brandSubtitle) : 'Sua operação conectada, em tempo real';
+$loginTitle = $brandEnabled ? (string) ($branding['login_title'] ?? ('Acesse o painel da ' . $brandName)) : 'Atendimento inteligente. Conversas que geram resultados.';
 $loginSubtitle = $brandEnabled ? (string) ($branding['login_subtitle'] ?? '') : '';
 $loginButtonText = $brandEnabled ? (string) ($branding['login_button_text'] ?? 'Acessar painel') : 'Entrar no RS Connect';
 $loginSecurityText = (string) ($branding['login_security_text'] ?? 'Ambiente seguro para administradores, equipes e clientes.');
@@ -66,7 +66,7 @@ $showPoweredBy = !empty($branding['show_powered_by']);
 
         <footer class="login-creator">
             <span class="login-creator-mark"><?= View::e(mb_strtoupper(mb_substr($brandName, 0, 2))) ?></span>
-            <span><?= View::e($footerText !== '' ? $footerText : $brandName) ?><?php if ($showPoweredBy): ?> · <strong>Powered by RS Connect</strong><?php endif; ?></span>
+            <span><?= View::e($brandEnabled ? ($footerText !== '' ? $footerText : $brandName) : 'Uma solução RS Digital Lab') ?><?php if ($showPoweredBy): ?> · <strong>Powered by RS Connect</strong><?php endif; ?></span>
         </footer>
     </section>
 

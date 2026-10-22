@@ -1,6 +1,0 @@
-HOTFIX: distinguir resposta "minha primeira consulta" de busca de compromisso existente.
-Instale o patch sobre o RS Connect atualizado até o hotfix de modalidades/triagem de 16/10/2026.
-Arquivos operacionais: app/Services/ExistingAppointmentConversationService.php.
-Teste: tests/Feature/appointment-new-booking-privacy-20261016.php.
-Detalhes: docs/HOTFIX_AGENDA_PRIORIDADE_NOVO_AGENDAMENTO_PRIVACIDADE_20261016.md.
-Backup + homologação antes de produção. Nenhuma migration necessária.

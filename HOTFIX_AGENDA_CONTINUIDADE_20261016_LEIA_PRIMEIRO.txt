@@ -1,9 +1,0 @@
-RS Connect - Hotfix continuidade da preferencia de agenda (16/10/2026)
-
-Base exigida: RS Connect Agenda Etapa 5 - Grade no WhatsApp.
-Objetivo: salvar dia e periodo em mensagens separadas e consultar grade sem exigir hora exata.
-
-Aplicacao: extrair o patch sobre a raiz do projeto, preservando a estrutura de diretorios.
-Nao executar migrations. Fazer backup. Validar primeiro em homologacao.
-
-Documentacao: docs/HOTFIX_AGENDA_CONTINUIDADE_PREFERENCIA_20261016.md
