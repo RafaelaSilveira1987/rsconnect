@@ -1005,6 +1005,21 @@ final class CalendarConversationService
             return ['ok' => false, 'message' => (string) ($availabilityCheck['message'] ?? 'O horário não está pronto para confirmação.')];
         }
 
+        // Captura ANTES de qualquer confirmação externa (Google/VAGO).
+        $pdo = Database::connection();
+        // A confirmação automática também deve preservar a triagem por compromisso.
+        $conversationIdForSnapshot = (int) ($appointment['conversation_id'] ?? 0);
+        try {
+            if ($conversationIdForSnapshot < 1 || !(new AppointmentTriageSnapshotService())->capture(
+                $pdo, $tenantId, $appointmentId, $conversationIdForSnapshot
+            )) {
+                return ['ok' => false, 'message' => 'Não foi possível preservar as informações deste pré-agendamento.'];
+            }
+        } catch (\Throwable $exception) {
+            error_log('[RS Connect] Falha no snapshot da confirmação automática: ' . $exception->getMessage());
+            return ['ok' => false, 'message' => 'Não foi possível preservar as informações do atendimento. Confira a migration 126.'];
+        }
+
         $markedConfirmation = $availabilityService->confirmMarkedAppointment($tenantId, $appointmentId);
         if (!empty($markedConfirmation['attempted']) && empty($markedConfirmation['ok'])) {
             return ['ok' => false, 'message' => (string) ($markedConfirmation['message'] ?? 'Falha ao confirmar o horário no Google Agenda.')];
@@ -1053,6 +1068,14 @@ final class CalendarConversationService
             if (!$current || (string) ($current['status'] ?? '') !== 'confirmed') {
                 return ['ok' => false, 'message' => 'O agendamento mudou de estado antes da confirmação.'];
             }
+        }
+
+        try {
+            if (!(new AppointmentTriageSnapshotService())->lockIfConfirmed($pdo, $tenantId, $appointmentId)) {
+                error_log('[RS Connect] Snapshot automático não congelado para compromisso ' . $appointmentId);
+            }
+        } catch (\Throwable $exception) {
+            error_log('[RS Connect] Falha no congelamento do snapshot automático: ' . $exception->getMessage());
         }
 
         Audit::log('calendar.appointment_confirmed_by_ai', [

@@ -53,8 +53,8 @@ $check(
 
 $check(
     str_contains($version, 'RS Connect 36.43.1')
-    && ($manifest['package_version'] ?? '') === '36.44.4'
-    && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql',
+    && ($manifest['package_version'] ?? '') === '36.44.5'
+    && ($manifest['database']['required_migration'] ?? '') === '126_appointment_triage_snapshot.sql',
     'release atual mantém migration 125 e corrige visualização/reoferta de capacidade'
 );
 

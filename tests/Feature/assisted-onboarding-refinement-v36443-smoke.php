@@ -50,10 +50,11 @@ $checks['definição da etapa não orienta mais escrever prompt ou abrir Assiste
     && str_contains($guide, 'As regras e o fluxo já vêm das etapas anteriores.');
 
 $checks['release 36.44.4 preserva migration atual e renova cache CSS'] =
-    ($manifest['package_version'] ?? '') === '36.44.4'
-    && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql'
-    && str_contains($version, 'RS Connect 36.44.4 — Configuração de negócio simplificada')
-    && str_contains($layout, '/assets/css/app.css?v=36.44.4');
+    ($manifest['package_version'] ?? '') === '36.44.5'
+    && ($manifest['database']['required_migration'] ?? '') === '126_appointment_triage_snapshot.sql'
+    && ($manifest['compatibility']['previous_release']['package_version'] ?? '') === '36.44.4'
+    && str_contains($version, 'RS Connect 36.44.4')
+    && str_contains($layout, '/assets/css/app.css?v=36.44.5');
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
 foreach ($checks as $label => $ok) {

@@ -102,10 +102,10 @@ $check(
 
 $check(
     str_contains($files['version'], 'RS Connect 36.43.0') && str_contains($files['version'], 'RS Connect 36.43.1') && str_contains($files['version'], 'RS Connect 36.44.0') && str_contains($files['version'], 'RS Connect 36.44.1')
-        && str_contains($files['version'], "REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql'")
-        && ($manifest['package_version'] ?? '') === '36.44.4'
-        && ($manifest['database']['required_migration'] ?? '') === '125_native_financial_lifecycle_notifications.sql'
-        && ($manifest['compatibility']['previous_release']['package_version'] ?? '') === '36.44.3',
+        && str_contains($files['version'], "REQUIRED_MIGRATION = '126_appointment_triage_snapshot.sql'")
+        && ($manifest['package_version'] ?? '') === '36.44.5'
+        && ($manifest['database']['required_migration'] ?? '') === '126_appointment_triage_snapshot.sql'
+        && ($manifest['compatibility']['previous_release']['package_version'] ?? '') === '36.44.4',
     'release atual preserva a migration 125 e a funcionalidade financeira da 36.43.0'
 );
 

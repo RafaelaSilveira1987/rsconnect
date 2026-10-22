@@ -253,8 +253,9 @@ final class AppVersionService
     // RS Connect 36.44.2 — Ativação Assistida enxuta: quatro blocos visuais, uma tarefa por vez e opções técnicas recolhidas.
     // RS Connect 36.44.3 — onboarding visual corrigido, SLA opt-in e assistente configurado no próprio fluxo.
     // RS Connect 36.44.4 — configuração do atendimento em linguagem de negócio, com salvamento transacional de perguntas, agenda e limites.
-    public const PACKAGE_LABEL = 'RS Connect 36.44.4 — Configuração de negócio simplificada';
-    public const REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql';
+    // RS Connect 36.44.5 — QA Fase 2: snapshot histórico por pré-agendamento e isolamento de respostas posteriores.
+    public const PACKAGE_LABEL = 'RS Connect 36.44.5 — QA Fase 2 (triagem histórica por agendamento)';
+    public const REQUIRED_MIGRATION = '126_appointment_triage_snapshot.sql';
 
     private PDO $pdo;
 

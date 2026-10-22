@@ -1,3 +1,12 @@
+## 21/10/2026 — QA Fase 2 (36.44.5): snapshot de triagem por agendamento
+
+- Migration 126 cria histórico independente da triagem para cada compromisso, com isolamento por empresa e congelamento após confirmação.
+- Pré-agendamento registra/atualiza contexto, e confirmação humana/automática exige preservação das respostas quando há conversa vinculada.
+- Agenda não usa respostas atuais da conversa para reconstituir registros confirmados antigos; indica histórico ausente sem reescrever dados.
+- Dois novos testes obrigatórios cobrem seleção de dados e migração/fluxo. Dez testes históricos de versionamento foram alinhados à migration 126 sem desabilitar checagens funcionais.
+- Referência local: `critical` 28/28, `all` 234/294 (60 pendências mantidas); banco/WhatsApp real ainda não homologados.
+- Ver `docs/QA_FASE2_SNAPSHOT_TRIAGEM_20261021.md`.
+
 ## 21/10/2026 — QA Fase 1: triagem aberta, grade e auditoria de segurança
 
 - Corrigida classificação que reduzia a Demanda de uma pergunta aberta iniciada por 'Tem ...?' a um simples 'Sim'.

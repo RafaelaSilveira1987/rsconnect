@@ -1,7 +1,7 @@
 {
   "name": "RS Connect",
-  "package_version": "36.44.4",
-  "release_name": "Configuração de negócio simplificada",
+  "package_version": "36.44.5",
+  "release_name": "QA Fase 2 — contexto histórico de triagem por agendamento",
   "runtime": {
     "php": ">=8.2",
     "container_image": "php:8.3-apache",
@@ -10,7 +10,7 @@
   },
   "database": {
     "driver": "mysql",
-    "required_migration": "125_native_financial_lifecycle_notifications.sql",
+    "required_migration": "126_appointment_triage_snapshot.sql",
     "migration_runner": "php bin/migrate.php"
   },
   "install": {
@@ -19,8 +19,8 @@
   },
   "compatibility": {
     "previous_release": {
-      "package_version": "36.44.3",
-      "release_name": "Ativação Assistida refinada",
+      "package_version": "36.44.4",
+      "release_name": "Configuração de negócio simplificada",
       "required_migration": "125_native_financial_lifecycle_notifications.sql"
     },
     "historical_releases": [

@@ -10,6 +10,8 @@ declare(strict_types=1);
 return [
     'critical' => [
         'tests/Regression/booking-invariants.php',
+        'tests/Feature/qa-appointment-triage-snapshot-20261021-smoke.php',
+        'tests/Feature/qa-appointment-snapshot-migration-20261021-smoke.php',
         'tests/Regression/triage-invariants.php',
         'tests/Feature/triage-open-answer-preservation-20261021-smoke.php',
         'tests/Feature/qa-security-current-contract-20261021-smoke.php',
@@ -44,5 +46,6 @@ return [
     ],
     'integration' => [
         'tests/Integration/qa-db-readiness.php',
+        'tests/Integration/qa-appointment-triage-snapshot-db.php',
     ],
 ];

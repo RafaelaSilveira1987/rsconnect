@@ -60,13 +60,13 @@ $checks['layout da nova etapa possui tratamento responsivo'] =
     str_contains($css, 'RS Connect 36.44.1 — cadastro da empresa orientado por segmento')
     && str_contains($css, '.onboarding-segment-preview')
     && str_contains($css, '@media (max-width: 760px)')
-    && str_contains($layout, '/assets/css/app.css?v=36.44.4');
+    && str_contains($layout, '/assets/css/app.css?v=36.44.5');
 
 $checks['release 36.44.1 publicada sem nova migration'] =
-    str_contains($manifest, '"package_version": "36.44.4"')
-    && str_contains($manifest, '"required_migration": "125_native_financial_lifecycle_notifications.sql"')
+    str_contains($manifest, '"package_version": "36.44.5"')
+    && str_contains($manifest, '"required_migration": "126_appointment_triage_snapshot.sql"')
     && str_contains($version, 'RS Connect 36.44.1 — Cadastro orientado por segmento')
-    && str_contains($version, "REQUIRED_MIGRATION = '125_native_financial_lifecycle_notifications.sql'");
+    && str_contains($version, "REQUIRED_MIGRATION = '126_appointment_triage_snapshot.sql'");
 
 $failed = array_keys(array_filter($checks, static fn (bool $ok): bool => !$ok));
 foreach ($checks as $label => $ok) {

@@ -190,7 +190,7 @@ $svgIcon = static function (string $name): string {
     <!-- Marcador histórico de regressão: app.css?v=36.20.5 -->
     <!-- Marcadores históricos de regressão: app.css?v=36.20.6 app.css?v=36.20.7 app.css?v=36.20.8 app.css?v=36.20.9 -->
     <!-- Compatibilidade histórica v36.30.5: app.css?v=36.30.5 app.js?v=36.30.5 -->
-    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.4')) ?>">
+    <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.44.5')) ?>">
     <?php if (!empty($expressAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-express.css?v=1&rev=20261014')) ?>"><?php endif; ?>
     <?php if (!empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-business.css?v=1&rev=20261015modalidades')) ?>"><?php endif; ?>
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/agent-ui-harmony.css?v=20261014')) ?>"><?php endif; ?>

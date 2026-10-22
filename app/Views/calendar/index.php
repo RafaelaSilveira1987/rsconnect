@@ -49,6 +49,9 @@ $triageCollected = static function (mixed $json): array {
     return is_array($decoded) ? $decoded : [];
 };
 $triageFieldLabels = is_array($triageFieldLabels ?? null) ? $triageFieldLabels : [];
+// O serviço puro é testado sem MySQL: nenhuma conversa posterior altera cartões antigos.
+$appointmentTriageContext = static fn (array $appointment): array =>
+    (new \App\Services\AppointmentTriagePresentationService())->resolve($appointment, $triageFieldLabels);
 $formatTriageValue = static function (mixed $value): string {
     if (is_bool($value)) return $value ? 'Sim' : 'Não';
     if (is_int($value) || is_float($value)) return (string) $value;
@@ -71,21 +74,22 @@ $hasPreScheduleContext = static function (array $appointment): bool {
         || trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
 };
 $appointmentContextRows = static function (array $appointment) use (
-    $triageCollected,
+    $appointmentTriageContext,
     $formatTriageValue,
-    $triageFieldLabels,
     $locationLabels,
     $contactGroupLabels,
     $demandStatusLabels,
     $preScheduleSourceLabels
 ): array {
-    $triageData = $triageCollected($appointment['triage_review_collected_json'] ?? $appointment['current_triage_collected_json'] ?? null);
-    $contactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
-    $demandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
+    $context = $appointmentTriageContext($appointment);
+    $triageData = $context['collected'];
+    $triageFieldLabels = $context['labels'];
+    $contactGroup = $context['group'] ?: 'unclassified';
+    $demandSummary = $context['demand_summary'];
     if ($demandSummary === '') {
         $demandSummary = trim((string) ($triageData['brief_demand'] ?? ''));
     }
-    $demandStatus = trim((string) ($appointment['current_demand_status'] ?? ''));
+    $demandStatus = $context['demand_status'];
     if ($demandStatus === '') {
         $demandStatus = $demandSummary !== '' ? 'collected' : 'pending';
     }
@@ -97,7 +101,7 @@ $appointmentContextRows = static function (array $appointment) use (
     $sourceKey = trim((string) ($appointment['pre_schedule_source'] ?? ''));
     $rows = [
         ['label' => 'Origem', 'value' => $preScheduleSourceLabels[$sourceKey] ?? ($sourceKey !== '' ? ucfirst(str_replace('_', ' ', $sourceKey)) : 'Não identificada')],
-        ['label' => 'Grupo do contato', 'value' => $contactGroupLabels[$contactGroup] ?? ucfirst(str_replace('_', ' ', $contactGroup))],
+        ['label' => 'Grupo do contato', 'value' => $context['historical_missing'] ? 'Não registrado' : ($contactGroupLabels[$contactGroup] ?? ucfirst(str_replace('_', ' ', $contactGroup)))],
         ['label' => 'Modalidade', 'value' => $locationLabels[$modality] ?? ($modality !== '' ? ucfirst($modality) : 'A definir')],
         ['label' => 'Dia/período informado', 'value' => trim((string) ($appointment['preferred_day_text'] ?? '')) ?: 'Não informado'],
         ['label' => 'Horário/período informado', 'value' => trim((string) ($appointment['preferred_time_text'] ?? '')) ?: 'Não informado'],
@@ -122,6 +126,9 @@ $appointmentContextRows = static function (array $appointment) use (
         ];
     }
 
+    if ($context['historical_missing']) {
+        $rows[] = ['label' => 'Triagem histórica', 'value' => 'Não registrada no momento da confirmação', 'wide' => true];
+    }
     if ($demandSummary !== '') {
         $rows[] = ['label' => 'Situação da demanda', 'value' => $demandStatusLabels[$demandStatus] ?? ucfirst(str_replace('_', ' ', $demandStatus))];
         $rows[] = [
@@ -446,13 +453,15 @@ $calendarEvents = array_map(static function (array $appointment) use (
                 $isPreSchedule = !empty($appointment['is_pre_schedule']);
                 $showStructuredContext = $isPreSchedule || $hasPreScheduleContext($appointment);
                 $hasPreSchedulePreference = trim((string) ($appointment['preferred_day_text'] ?? '')) !== '' && trim((string) ($appointment['preferred_time_text'] ?? '')) !== '';
-                $currentContactGroup = trim((string) ($appointment['current_contact_group'] ?? '')) ?: 'unclassified';
-                $triageData = $triageCollected($appointment['triage_review_collected_json'] ?? $appointment['current_triage_collected_json'] ?? null);
-                $currentDemandSummary = trim((string) ($appointment['current_demand_summary'] ?? ''));
+                $recordContext = $appointmentTriageContext($appointment);
+                $recordTriageLabels = $recordContext['labels'];
+                $currentContactGroup = $recordContext['group'] ?: 'unclassified';
+                $triageData = $recordContext['collected'];
+                $currentDemandSummary = $recordContext['demand_summary'];
                 if ($currentDemandSummary === '') {
                     $currentDemandSummary = trim((string) ($triageData['brief_demand'] ?? ''));
                 }
-                $currentDemandStatus = trim((string) ($appointment['current_demand_status'] ?? ''));
+                $currentDemandStatus = $recordContext['demand_status'];
                 if ($currentDemandStatus === '') {
                     $currentDemandStatus = $currentDemandSummary !== '' ? 'collected' : 'pending';
                 }
@@ -469,7 +478,7 @@ $calendarEvents = array_map(static function (array $appointment) use (
                 // pergunta personalizada aparecem sem criar novos ifs por segmento.
                 $dynamicTriageRows = [];
                 $dedicatedTriageKeys = ['modality', 'preferred_schedule', 'brief_demand'];
-                foreach ($triageFieldLabels as $fieldKey => $fieldLabel) {
+                foreach ($recordTriageLabels as $fieldKey => $fieldLabel) {
                     if (in_array((string) $fieldKey, $dedicatedTriageKeys, true)
                         || !array_key_exists((string) $fieldKey, $triageData)) {
                         continue;
@@ -505,25 +514,30 @@ $calendarEvents = array_map(static function (array $appointment) use (
                                     <span class="eyebrow"><?= $isPreSchedule ? 'Pré-agendamento' : 'Atendimento confirmado' ?></span>
                                     <strong><?= $isPreSchedule ? 'Informações registradas' : 'Informações trazidas do pré-agendamento' ?></strong>
                                 </div>
-                                <small>Informações atuais da conversa (podem ter mudado desde o agendamento).</small>
+                                <small><?= $recordContext['has_snapshot']
+                                    ? (!empty($appointment['context_snapshot_locked_at']) ? 'Respostas preservadas na confirmação.' : 'Respostas registradas neste pré-agendamento.')
+                                    : ($isPreSchedule ? 'Informações provisórias da triagem atual.' : 'Histórico de triagem não disponível para este compromisso.') ?></small>
                             </div>
                             <dl class="pre-schedule-record-list">
+                                <?php if ($recordContext['historical_missing']): ?>
+                                    <div class="pre-schedule-record-wide"><dt>Triagem histórica</dt><dd>Não registrada no momento da confirmação. Respostas atuais da conversa não são exibidas como histórico.</dd></div>
+                                <?php endif; ?>
                                 <div><dt>Origem</dt><dd><?= View::e($sourceLabel) ?></dd></div>
-                                <div><dt>Grupo do contato</dt><dd><?= View::e($contactGroupLabels[$currentContactGroup] ?? ucfirst(str_replace('_', ' ', $currentContactGroup))) ?></dd></div>
+                                <div><dt>Grupo do contato</dt><dd><?= View::e($recordContext['historical_missing'] ? 'Não registrado' : ($contactGroupLabels[$currentContactGroup] ?? ucfirst(str_replace('_', ' ', $currentContactGroup)))) ?></dd></div>
                                 <div><dt>Modalidade</dt><dd><?= View::e($locationLabels[$currentModality] ?? ($currentModality !== '' ? ucfirst($currentModality) : 'A definir')) ?></dd></div>
                                 <div><dt>Dia/período informado</dt><dd><?= View::e(($appointment['preferred_day_text'] ?? '') ?: 'Não informado') ?></dd></div>
                                 <div><dt>Horário/período informado</dt><dd><?= View::e(($appointment['preferred_time_text'] ?? '') ?: 'Não informado') ?></dd></div>
                                 <div><dt>Contato</dt><dd><?= View::e(trim((string) ($appointment['contact_name'] ?? '')) ?: 'Não identificado') ?></dd></div>
                                 <div><dt>Responsável</dt><dd><?= View::e(trim((string) ($appointment['owner_name'] ?? '')) ?: 'Não definido') ?></dd></div>
-                                <?php foreach ((array) ($appointment['triage_review_invalid_keys'] ?? []) as $invalidKey): ?>
-                                    <div class="pre-schedule-record-wide"><dt><?= View::e($triageFieldLabels[(string) $invalidKey] ?? (string) $invalidKey) ?></dt><dd>Resposta incompatível com este campo — conferir com a equipe</dd></div>
+                                <?php foreach ($recordContext['invalid'] as $invalidKey): ?>
+                                    <div class="pre-schedule-record-wide"><dt><?= View::e($recordTriageLabels[(string) $invalidKey] ?? (string) $invalidKey) ?></dt><dd>Resposta incompatível com este campo — conferir com a equipe</dd></div>
                                 <?php endforeach; ?>
                                 <?php foreach ($dynamicTriageRows as $triageRow): ?>
                                     <div class="pre-schedule-record-wide"><dt><?= View::e($triageRow['label']) ?></dt><dd><?= View::e($triageRow['value']) ?></dd></div>
                                 <?php endforeach; ?>
                                 <?php if ($showLegacyDemand): ?>
                                     <div><dt>Situação da demanda</dt><dd><?= View::e($demandStatusLabels[$currentDemandStatus] ?? ucfirst(str_replace('_', ' ', $currentDemandStatus))) ?></dd></div>
-                                    <div class="pre-schedule-record-wide"><dt><?= View::e($triageFieldLabels['brief_demand'] ?? 'Demanda') ?></dt><dd><?= View::e($currentDemandSummary) ?></dd></div>
+                                    <div class="pre-schedule-record-wide"><dt><?= View::e($recordTriageLabels['brief_demand'] ?? 'Demanda') ?></dt><dd><?= View::e($currentDemandSummary) ?></dd></div>
                                 <?php endif; ?>
                             </dl>
                         </section>

@@ -393,6 +393,12 @@ final class PreSchedulingService
             }
 
             $update = $this->updatePendingPreSchedule($pdo, $tenantId, $conversationId, $existing, $intent, $content, $availabilityInquiry);
+            // Snapshot operacional por agendamento: não depende de consultas futuras ao contato.
+            try {
+                (new AppointmentTriageSnapshotService())->capture($pdo, $tenantId, (int) $existing['id'], $conversationId);
+            } catch (Throwable $exception) {
+                error_log('[RS Connect] Snapshot pendente não persistido: ' . $exception->getMessage());
+            }
             $result = array_merge($result, [
                 'updated' => true,
                 'appointment_id' => (int) ($existing['id'] ?? 0),
@@ -653,6 +659,11 @@ final class PreSchedulingService
                 : 'Criado automaticamente a partir da intenção de agenda detectada na conversa #' . $conversationId,
         ]);
         $appointmentId = (int) $pdo->lastInsertId();
+        try {
+            (new AppointmentTriageSnapshotService())->capture($pdo, $tenantId, $appointmentId, $conversationId);
+        } catch (Throwable $exception) {
+            error_log('[RS Connect] Snapshot inicial não persistido: ' . $exception->getMessage());
+        }
 
         $pdo->prepare(
             'INSERT INTO conversation_events (tenant_id, conversation_id, event_type, description, metadata_json)

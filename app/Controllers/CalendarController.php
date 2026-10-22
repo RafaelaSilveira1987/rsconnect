@@ -13,6 +13,7 @@ use App\Core\Flash;
 use App\Core\Router;
 use App\Core\View;
 use App\Services\AgentTriageService;
+use App\Services\AppointmentTriageSnapshotService;
 use App\Services\AutomationWebhookService;
 use App\Services\CalendarAvailabilityService;
 use App\Services\CalendarClientCommunicationService;
@@ -224,12 +225,41 @@ final class CalendarController
                 $triageFieldDefinitions = [];
             }
 
+            // Carrega histórico por compromisso; contexto vivo só é fallback de pré-agendamento.
+            if ($appointments !== []) {
+                try {
+                    $snapshots = (new AppointmentTriageSnapshotService())->forAppointments(
+                        $pdo, $tenantId, array_column($appointments, 'id')
+                    );
+                    foreach ($appointments as &$calendarAppointment) {
+                        $snapshot = $snapshots[(int) ($calendarAppointment['id'] ?? 0)] ?? null;
+                        if (is_array($snapshot)) {
+                            $calendarAppointment['context_snapshot_present'] = true;
+                            $calendarAppointment['context_snapshot_collected_json'] = $snapshot['collected_json'];
+                            $calendarAppointment['context_snapshot_labels_json'] = $snapshot['field_labels_json'];
+                            $calendarAppointment['context_snapshot_invalid_keys_json'] = $snapshot['invalid_keys_json'];
+                            $calendarAppointment['context_snapshot_demand_status'] = $snapshot['demand_status'];
+                            $calendarAppointment['context_snapshot_demand_summary'] = $snapshot['demand_summary'];
+                            $calendarAppointment['context_snapshot_contact_group'] = $snapshot['contact_group'];
+                            $calendarAppointment['context_snapshot_locked_at'] = $snapshot['locked_at'];
+                        }
+                    }
+                    unset($calendarAppointment);
+                } catch (Throwable $exception) {
+                    // Falha fechada na apresentação: dados atuais não viram histórico.
+                    error_log('[RS Connect] Erro ao carregar snapshots: ' . $exception->getMessage());
+                }
+            }
+
             // Exibição conservadora: o registro histórico não deve apresentar
             // saudação como telefone nem resposta de outra etapa como primeira consulta.
             // A triagem atual continua armazenada, sem alterações silenciosas no banco.
             if ($appointments !== [] && $triageFieldDefinitions !== []) {
                 $reviewService = new AgentTriageService();
                 foreach ($appointments as &$calendarAppointment) {
+                    if (empty($calendarAppointment['is_pre_schedule']) || !empty($calendarAppointment['context_snapshot_present'])) {
+                        continue;
+                    }
                     $stored = json_decode((string) ($calendarAppointment['current_triage_collected_json'] ?? '{}'), true);
                     $stored = is_array($stored) ? $stored : [];
                     $review = $reviewService->reviewCollectedValues($triageFieldDefinitions, $stored);
@@ -754,6 +784,19 @@ final class CalendarController
         $rescheduleFinalizeWarning = null;
 
         if ($status === 'confirmed' && $wasPreSchedule) {
+            try {
+                $conversationIdForSnapshot = (int) ($appointmentBefore['conversation_id'] ?? 0);
+                if ($conversationIdForSnapshot > 0 && !(new AppointmentTriageSnapshotService())->capture(
+                    Database::connection(), $tenantId, $appointmentId, $conversationIdForSnapshot
+                )) {
+                    Flash::set('error', 'A confirmação precisa preservar as informações da triagem. Confira o vínculo da conversa.');
+                    $this->redirect('/calendar?tenant_id=' . $tenantId);
+                }
+            } catch (Throwable $exception) {
+                error_log('[RS Connect] Não foi possível registrar triagem antes da confirmação: ' . $exception->getMessage());
+                Flash::set('error', 'Não foi possível preservar a triagem. Confirme que a migration 126 foi aplicada.');
+                $this->redirect('/calendar?tenant_id=' . $tenantId);
+            }
             $preferredDay = trim((string) ($appointmentBefore['preferred_day_text'] ?? ''));
             $preferredTime = trim((string) ($appointmentBefore['preferred_time_text'] ?? ''));
             if ($preferredDay === '' || $preferredTime === '') {
@@ -833,6 +876,15 @@ final class CalendarController
         if ($statement->rowCount() === 0) {
             Flash::set('error', 'O agendamento foi alterado por outra operação. Atualize a página e confira o estado atual.');
         } else {
+            if ($status === 'confirmed' && $wasPreSchedule && (int) ($appointmentBefore['conversation_id'] ?? 0) > 0) {
+                try {
+                    if (!(new AppointmentTriageSnapshotService())->lockIfConfirmed(Database::connection(), $tenantId, $appointmentId)) {
+                        error_log('[RS Connect] Snapshot de triagem não bloqueado para compromisso ' . $appointmentId);
+                    }
+                } catch (Throwable $exception) {
+                    error_log('[RS Connect] Erro ao congelar snapshot: ' . $exception->getMessage());
+                }
+            }
             Audit::log('calendar.appointment_status_updated', ['appointment_id' => $appointmentId, 'status' => $status], $tenantId);
             $this->trySyncToN8n($appointmentId, $tenantId, 'status_updated');
             $statusLabel = match ($status) {
