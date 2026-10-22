@@ -31,6 +31,7 @@ $brandCssVariables = '--rs-blue:' . $brandPrimary . ';--rs-purple:' . $brandSeco
     <?php if ($brandFaviconUrl !== ''): ?><link rel="icon" href="<?= View::e($brandAssetHref($brandFaviconUrl)) ?>"><?php elseif (empty($branding['enabled'])): ?><link rel="icon" type="image/png" href="<?= View::e(Router::url('/assets/img/rs-connect-next-favicon.png')) ?>"><?php endif; ?>
     <link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/app.css?v=36.39.2')) ?>">
     <?php if (empty($branding['enabled'])): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next.css?v=20261022-1')) ?>"><?php endif; ?>
+    <?php if (empty($branding['enabled'])): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next-v2.css?v=20261022-2')) ?>"><?php endif; ?>
 </head>
 <body class="guest-page<?= !empty($branding['enabled']) ? ' has-tenant-branding' : ' rs-next-login' ?>" style="<?= View::e($brandCssVariables) ?>">
     <main class="guest-shell">

@@ -198,6 +198,7 @@ $svgIcon = static function (string $name): string {
     <?php if (!empty($expressAssets) || !empty($businessDashboardAssets) || !empty($activationAssets) || !empty($blueprintAssets)): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-activation-unified.css?v=20261014b')) ?>"><?php endif; ?>
     <?php if ($businessDesign): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-business-unified.css?v=20261015a')) ?>"><?php endif; ?>
     <?php if (!$brandEnabled): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next.css?v=20261022-1')) ?>"><?php endif; ?>
+    <?php if (!$brandEnabled): ?><link rel="stylesheet" href="<?= View::e(Router::url('/assets/css/rs-connect-next-v2.css?v=20261022-2')) ?>"><?php endif; ?>
     <style>
         .brand.is-custom-brand .brand-mark-client-logo {
             width: 54px !important;

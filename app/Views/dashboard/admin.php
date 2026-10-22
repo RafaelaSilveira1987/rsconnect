@@ -48,7 +48,9 @@ $statusLabel = static fn (string $status): string => OperationalLanguageService:
         <a class="btn btn-outline" href="<?= View::e(Router::url('/operations')) ?>">Abrir monitoramento</a>
         <a class="btn btn-quiet" href="<?= View::e(Router::url('/?refresh=' . time())) ?>">Atualizar dados</a>
     </div>
-    <?php if ($refreshedAt): ?><small class="admin-dashboard-updated">Dados consultados em <?= View::e($dateTime((string) $refreshedAt)) ?><?= $sourceVersion !== '' ? ' · motor ' . View::e($sourceVersion) : '' ?><?= $databaseName !== '' ? ' · banco ' . View::e($databaseName) : '' ?></small><?php endif; ?>
+    <?php if ($refreshedAt): ?>
+        <small class="admin-dashboard-updated" title="<?= View::e(trim(($sourceVersion !== '' ? 'Motor: ' . $sourceVersion : '') . ($databaseName !== '' ? ' · Banco: ' . $databaseName : ''))) ?>">Dados atualizados em <?= View::e($dateTime((string) $refreshedAt)) ?></small>
+    <?php endif; ?>
 </section>
 
 <?php if ($dataWarnings): ?>
