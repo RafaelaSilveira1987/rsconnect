@@ -1,6 +1,12 @@
 Options -Indexes
 RewriteEngine On
 
+# When EasyPanel mounts the application at /rsconnect, keep the existing
+# front controller and static files accessible at that public prefix.
+# The exact-segment boundary prevents matching unrelated URLs.
+RewriteRule ^rsconnect/?$ index.php [QSA,L]
+RewriteRule ^rsconnect/(.*)$ $1 [QSA,L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [QSA,L]
