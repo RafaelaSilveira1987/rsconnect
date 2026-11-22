@@ -29,6 +29,15 @@ if (!class_exists(Autoloader::class, false)) {
 Autoloader::register($root . '/app');
 require_once $root . '/bootstrap.php';
 
+// Internal controllers and middlewares still use root-relative paths.
+// Keep the original URL available for diagnostics while normalizing the
+// mount prefix for all internal routing, access checks and CSRF handling.
+$_SERVER['RS_ORIGINAL_REQUEST_URI'] = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+$_SERVER['REQUEST_URI'] = \App\Core\PublicPath::internalRequestUri(
+    $_SERVER['RS_ORIGINAL_REQUEST_URI'],
+    (string) \App\Core\Env::get('APP_URL', '')
+);
+
 if (!class_exists(Router::class)) {
     http_response_code(500);
     error_log('RS Connect bootstrap error: App\\Core\\Router could not be loaded.');
